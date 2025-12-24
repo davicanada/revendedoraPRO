@@ -1,0 +1,58 @@
+export enum Brand {
+  NATURA = 'Natura',
+  AVON = 'Avon',
+  OTHER = 'Outra'
+}
+
+export enum SaleType {
+  PHYSICAL = 'Física (Estoque)',
+  ONLINE = 'Online (Link)'
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  brand: Brand;
+  category: string;
+  stockQuantity: number;
+  costPrice: number; // Preço de custo médio
+  salePrice: number; // Preço de venda sugerido
+  image?: string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+  tags: string[]; // 'VIP', 'Novo', 'Inativo'
+  totalSpent: number;
+  lastPurchaseDate?: string;
+  birthDate?: string;
+}
+
+export interface Sale {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  date: string;
+  type: SaleType;
+  items: SaleItem[];
+  totalAmount: number;
+  profit: number;
+}
+
+export interface SaleItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface DashboardMetrics {
+  totalProfitMonth: number;
+  totalSalesMonth: number;
+  activeCustomers: number;
+  lowStockCount: number;
+}

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Supabase Connection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .test-box {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .error {
+            color: #ff6b6b;
+            background: #2a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #51cf66;
+            background: #1a2a1a;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 4px;
+        }
+        pre {
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Teste de Conexão Supabase</h1>
+
+    <div class="test-box">
+        <h2>1. Verificar Configuração</h2>
+        <button onclick="testConfig()">Testar Configuração</button>
+        <div id="config-result"></div>
+    </div>
+
+    <div class="test-box">
+        <h2>2. Testar Conexão com Database</h2>
+        <button onclick="testConnection()">Testar Conexão</button>
+        <div id="connection-result"></div>
+    </div>
+
+    <div class="test-box">
+        <h2>3. Criar Conta de Teste</h2>
+        <input type="text" id="fullName" placeholder="Nome Completo" value="Lêda Simões de Almeida">
+        <input type="email" id="email" placeholder="Email" value="ledalmeida14@hotmail.com">
+        <input type="password" id="password" placeholder="Senha (mín. 6 caracteres)" value="291196">
+        <button onclick="testSignUp()">Criar Conta</button>
+        <div id="signup-result"></div>
+    </div>
+
+    <div class="test-box">
+        <h2>4. Verificar Tabelas</h2>
+        <button onclick="checkTables()">Verificar Tabelas</button>
+        <div id="tables-result"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://zlqcuoacfzalwbfwlakp.supabase.co';
+        const SUPABASE_ANON_KEY = 'sbp_731e24ee4ad98d4ae2e121f3ccba061e130417d0';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        function testConfig() {
+            const result = document.getElementById('config-result');
+            result.innerHTML = '<div class="success">✅ Supabase URL: ' + SUPABASE_URL + '</div>';
+            result.innerHTML += '<div class="success">✅ Anon Key: ' + SUPABASE_ANON_KEY.substring(0, 20) + '...</div>';
+        }
+
+        async function testConnection() {
+            const result = document.getElementById('connection-result');
+            result.innerHTML = '<p>Testando...</p>';
+
+            try {
+                const { data, error } = await supabase.from('profiles').select('count');
+
+                if (error) {
+                    result.innerHTML = '<div class="error">❌ Erro ao conectar: ' + error.message + '</div>';
+                    result.innerHTML += '<pre>' + JSON.stringify(error, null, 2) + '</pre>';
+                } else {
+                    result.innerHTML = '<div class="success">✅ Conexão OK! Tabela profiles acessível.</div>';
+                }
+            } catch (err) {
+                result.innerHTML = '<div class="error">❌ Erro: ' + err.message + '</div>';
+            }
+        }
+
+        async function testSignUp() {
+            const result = document.getElementById('signup-result');
+            const fullName = document.getElementById('fullName').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            result.innerHTML = '<p>Criando conta...</p>';
+
+            try {
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: {
+                            full_name: fullName
+                        }
+                    }
+                });
+
+                if (error) {
+                    result.innerHTML = '<div class="error">❌ Erro ao criar conta:</div>';
+                    result.innerHTML += '<pre>' + JSON.stringify(error, null, 2) + '</pre>';
+
+                    // Mensagens de erro comuns
+                    if (error.message.includes('email')) {
+                        result.innerHTML += '<div class="error">💡 Dica: Este email pode já estar cadastrado. Tente outro email.</div>';
+                    }
+                    if (error.message.includes('password')) {
+                        result.innerHTML += '<div class="error">💡 Dica: A senha pode ser muito curta. Tente uma senha maior.</div>';
+                    }
+                } else {
+                    result.innerHTML = '<div class="success">✅ Conta criada com sucesso!</div>';
+                    result.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+
+                    if (data.user && data.user.email_confirmed_at === null) {
+                        result.innerHTML += '<div class="error">⚠️ Atenção: Confirmação de email está habilitada. Você precisa confirmar o email antes de fazer login.</div>';
+                    }
+                }
+            } catch (err) {
+                result.innerHTML = '<div class="error">❌ Erro inesperado: ' + err.message + '</div>';
+                console.error('Erro completo:', err);
+            }
+        }
+
+        async function checkTables() {
+            const result = document.getElementById('tables-result');
+            result.innerHTML = '<p>Verificando tabelas...</p>';
+
+            const tables = ['profiles', 'products', 'customers', 'sales', 'categories', 'credit_cards', 'settings'];
+            let html = '';
+
+            for (const table of tables) {
+                try {
+                    const { data, error } = await supabase.from(table).select('count');
+
+                    if (error) {
+                        html += '<div class="error">❌ ' + table + ': ' + error.message + '</div>';
+                    } else {
+                        html += '<div class="success">✅ ' + table + ': OK</div>';
+                    }
+                } catch (err) {
+                    html += '<div class="error">❌ ' + table + ': ' + err.message + '</div>';
+                }
+            }
+
+            result.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

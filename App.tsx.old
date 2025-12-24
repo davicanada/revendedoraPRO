@@ -1,0 +1,1983 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Home, 
+  Package, 
+  Users, 
+  ShoppingBag, 
+  Plus, 
+  Minus,
+  Search, 
+  Filter, 
+  ChevronRight, 
+  ChevronDown,
+  ChevronUp,
+  LogOut,
+  TrendingUp,
+  AlertCircle,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Leaf,
+  DollarSign,
+  Bell,
+  Smartphone,
+  PiggyBank,
+  Archive,
+  ArrowLeft,
+  MoreHorizontal,
+  Camera,
+  Link as LinkIcon,
+  Image as ImageIcon,
+  GripVertical,
+  Scissors,
+  Droplet,
+  Sparkles,
+  SprayCan,
+  Settings,
+  CreditCard,
+  Trash2,
+  Edit2,
+  CheckCircle2,
+  Circle,
+  X,
+  Calendar,
+  Wallet,
+  Check,
+  Palette,
+  ShoppingCart,
+  ScanBarcode,
+  Tag,
+  HelpCircle,
+  Info,
+  UserPlus,
+  Wand2,
+  Brush,
+  ChevronLeft
+} from 'lucide-react';
+import { 
+  AreaChart,
+  Area, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+import { INITIAL_PRODUCTS, INITIAL_CUSTOMERS, INITIAL_SALES, CATEGORIES as CONSTANT_CATEGORIES } from './constants';
+import { Product, Customer, Sale, Brand, SaleType } from './types';
+
+// --- View Definitions ---
+type View = 'login' | 'dashboard' | 'stock' | 'customers' | 'sales' | 'add-product' | 'add-customer' | 'new-sale' | 'categories' | 'settings' | 'credit-cards' | 'manage-brands';
+
+// --- Constants ---
+const BANKS_PRESETS = [
+  { name: 'Nubank', color: 'bg-purple-600', icon: 'NB' },
+  { name: 'Itaú', color: 'bg-orange-600', icon: 'IT' },
+  { name: 'Bradesco', color: 'bg-red-600', icon: 'BR' },
+  { name: 'Santander', color: 'bg-red-700', icon: 'SA' },
+  { name: 'Banco Inter', color: 'bg-orange-500', icon: 'IN' },
+  { name: 'C6 Bank', color: 'bg-gray-800', icon: 'C6' },
+  { name: 'Caixa', color: 'bg-blue-600', icon: 'CX' },
+  { name: 'Banco do Brasil', color: 'bg-yellow-500', icon: 'BB' },
+  { name: 'Outro', color: 'bg-gray-600', icon: 'OT' },
+];
+
+const CATEGORY_COLORS = [
+  { name: 'Roxo', text: 'text-purple-400', bg: 'bg-purple-400/10' },
+  { name: 'Rosa', text: 'text-pink-400', bg: 'bg-pink-400/10' },
+  { name: 'Azul', text: 'text-blue-400', bg: 'bg-blue-400/10' },
+  { name: 'Laranja', text: 'text-orange-400', bg: 'bg-orange-400/10' },
+  { name: 'Verde', text: 'text-green-400', bg: 'bg-green-400/10' },
+  { name: 'Vermelho', text: 'text-red-400', bg: 'bg-red-400/10' },
+];
+
+// --- Components ---
+
+// 1. Reusable UI Components
+const Button = ({ children, onClick, variant = 'primary', className = '', type = 'button', disabled = false }: any) => {
+  const baseStyle = "w-full py-3.5 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  const variants = {
+    primary: "bg-brand-primary text-brand-dark hover:bg-brand-primaryHover shadow-lg shadow-brand-primary/20",
+    secondary: "bg-transparent border border-brand-primary text-brand-primary hover:bg-brand-primary/10",
+    ghost: "bg-transparent text-brand-muted hover:text-white"
+  };
+  
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant as keyof typeof variants]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+const Input = ({ label, icon: Icon, className, ...props }: any) => (
+  <div className="mb-4">
+    {label && <label className="block text-sm text-brand-muted mb-1.5 ml-1">{label}</label>}
+    <div className="relative">
+      {Icon && (
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted">
+          <Icon size={20} />
+        </div>
+      )}
+      <input 
+        className={`w-full bg-brand-surface border border-transparent focus:border-brand-primary/50 text-white rounded-xl py-3.5 ${Icon ? 'pl-11' : 'pl-4'} pr-4 outline-none transition-all placeholder-gray-500 ${className || ''}`}
+        {...props}
+      />
+    </div>
+  </div>
+);
+
+const Card = ({ children, className = '' }: any) => (
+  <div className={`bg-brand-surface rounded-2xl p-4 shadow-sm border border-white/5 ${className}`}>
+    {children}
+  </div>
+);
+
+const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
+  <button 
+    onClick={onChange}
+    className={`w-12 h-7 rounded-full p-1 transition-colors duration-200 ease-in-out ${checked ? 'bg-brand-primary' : 'bg-gray-600'}`}
+  >
+    <div className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+  </button>
+);
+
+// New Delete Confirmation Modal Component
+const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, title, description }: { isOpen: boolean; onClose: () => void; onConfirm: () => void; title: string; description: string }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[#2a1b2e] w-full max-w-sm rounded-[32px] p-6 border border-white/10 shadow-2xl relative flex flex-col items-center text-center">
+        
+        {/* Trash Icon Circle */}
+        <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-5 relative group">
+           <div className="absolute inset-0 bg-brand-primary/20 rounded-full blur-xl opacity-50 group-hover:opacity-100 transition-opacity"></div>
+           <Trash2 size={32} className="text-white relative z-10" strokeWidth={1.5} />
+        </div>
+
+        <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+        <p className="text-sm text-brand-muted leading-relaxed mb-8 px-2">
+          {description}
+        </p>
+
+        <div className="w-full space-y-3">
+          <button 
+            onClick={onConfirm}
+            className="w-full py-4 rounded-xl font-bold bg-[#FF4D4D] text-white hover:bg-[#ff3333] transition-colors shadow-lg shadow-red-500/20"
+          >
+            Confirmar Exclusão
+          </button>
+          <button 
+            onClick={onClose}
+            className="w-full py-4 rounded-xl font-bold bg-transparent border border-white/10 text-white hover:bg-white/5 transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BottomNav = ({ currentView, setView }: { currentView: View, setView: (v: View) => void }) => {
+  const navItems = [
+    { id: 'dashboard', icon: Home, label: 'Início' },
+    { id: 'stock', icon: Package, label: 'Estoque' },
+    { id: 'sales', icon: ShoppingBag, label: 'Vendas' },
+    { id: 'customers', icon: Users, label: 'Clientes' },
+  ];
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-brand-surface border-t border-brand-secondary/30 pb-safe pt-2 px-6 z-50">
+      <div className="flex justify-between items-center h-16 max-w-md mx-auto">
+        {navItems.map((item) => {
+          const isActive = currentView === item.id;
+          return (
+            <button 
+              key={item.id}
+              onClick={() => setView(item.id as View)}
+              className={`flex flex-col items-center gap-1 w-16 transition-colors ${isActive ? 'text-brand-primary' : 'text-gray-500'}`}
+            >
+              <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Helper for Brand Logos (SVG)
+const BrandLogo = ({ brand }: { brand: string }) => {
+  if (!brand) return null;
+  
+  switch (brand) {
+    case 'Natura':
+      return (
+        <div className="w-12 h-12 rounded-full bg-[#FF6B00] flex items-center justify-center overflow-hidden shadow-lg border border-white/10 relative">
+           <svg width="26" height="26" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+             <path 
+               d="M50 85C50 85 30 75 25 60C20 45 30 35 35 35C25 35 15 25 25 15C35 5 50 15 50 20C50 15 65 5 75 15C85 25 75 35 65 35C70 35 80 45 75 60C70 75 50 85 50 85Z" 
+               stroke="white" 
+               strokeWidth="6" 
+               strokeLinecap="round" 
+               strokeLinejoin="round"
+             />
+             <path 
+               d="M50 85C50 85 30 75 25 60C20 45 30 35 35 35C25 35 15 25 25 15C35 5 50 15 50 20C50 15 65 5 75 15C85 25 75 35 65 35C70 35 80 45 75 60C70 75 50 85 50 85Z" 
+               fill="white"
+               fillOpacity="0.1"
+             />
+           </svg>
+        </div>
+      );
+    case 'Avon':
+      return (
+        <div className="w-12 h-12 rounded-full bg-[#E5004B] flex items-center justify-center overflow-hidden shadow-lg border border-white/10">
+           <span className="text-white font-bold tracking-widest text-[11px] font-sans">AVON</span>
+        </div>
+      );
+    case 'O Boticário':
+      return (
+        <div className="w-12 h-12 rounded-full bg-[#006A4E] flex items-center justify-center overflow-hidden shadow-lg border border-white/10">
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <rect x="6" y="9" width="12" height="12" rx="4" />
+              <path d="M9 9V6a3 3 0 0 1 6 0v3" />
+              <path d="M9 9h6" />
+           </svg>
+        </div>
+      );
+    case 'Eudora':
+       return (
+        <div className="w-12 h-12 rounded-full bg-[#391345] flex items-center justify-center overflow-hidden shadow-lg border border-white/10">
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D4AF37" strokeWidth="2">
+             <path d="M6 9l6-6 6 6-6 6-6-6z" fill="#D4AF37" fillOpacity="0.2"/>
+             <path d="M12 15v6" />
+             <path d="M12 3v6" />
+             <path d="M3 12h18" strokeOpacity="0.5"/>
+           </svg>
+        </div>
+      );
+    default:
+      return (
+        <div className="w-12 h-12 rounded-full bg-brand-surface flex items-center justify-center overflow-hidden shadow-lg border border-white/10">
+           <span className="text-brand-muted text-xs font-bold">
+             {brand.length >= 2 ? brand.substring(0,2).toUpperCase() : brand.toUpperCase()}
+           </span>
+        </div>
+      );
+  }
+}
+
+// 2. Main Application Component
+export default function App() {
+  const [view, setView] = useState<View>('login');
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
+  const [sales, setSales] = useState<Sale[]>(INITIAL_SALES);
+  
+  // Lifted state for Categories
+  const [categories, setCategories] = useState([
+    { id: '1', name: 'Perfumes', icon: SprayCan, color: 'text-purple-400', bg: 'bg-purple-400/10', expanded: true, subs: ['Masculino', 'Feminino', 'Infantil'] },
+    { id: '2', name: 'Maquiagem', icon: Sparkles, color: 'text-pink-400', bg: 'bg-pink-400/10', expanded: false, subs: ['Batons', 'Sombras', 'Base'] },
+    { id: '3', name: 'Sabonete', icon: Droplet, color: 'text-blue-400', bg: 'bg-blue-400/10', expanded: false, subs: [] },
+    { id: '4', name: 'Hidratante', icon: Droplet, color: 'text-orange-400', bg: 'bg-orange-400/10', expanded: false, subs: [] },
+    { id: '5', name: 'Cabelo', icon: Scissors, color: 'text-purple-300', bg: 'bg-purple-300/10', expanded: false, subs: [] }
+  ]);
+
+  // Global Delete Confirmation State
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {}
+  });
+
+  // Helper to open delete confirmation
+  const requestDelete = (title: string, description: string, onConfirmAction: () => void) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      title,
+      description,
+      onConfirm: () => {
+        onConfirmAction();
+        setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  // -- Login Logic --
+  const LoginScreen = () => {
+    const [showPassword, setShowPassword] = useState(false);
+    
+    return (
+      <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-brand-primary/20 rounded-full blur-[100px]" />
+        
+        <div className="w-full max-w-sm z-10 flex flex-col gap-8">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-20 h-20 bg-brand-surface rounded-3xl flex items-center justify-center shadow-2xl shadow-brand-primary/20 mb-4">
+               <Leaf size={40} className="text-brand-primary" fill="currentColor" fillOpacity={0.3} />
+            </div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Bem-vinda</h1>
+            <p className="text-gray-400 text-center text-sm px-4">
+              Acesse seu painel de gestão financeira e controle suas vendas Natura & Avon.
+            </p>
+          </div>
+
+          <form className="w-full space-y-4" onSubmit={(e) => { e.preventDefault(); setView('dashboard'); }}>
+            <Input 
+              type="email" 
+              placeholder="exemplo@email.com" 
+              label="E-mail"
+              icon={Mail}
+              defaultValue="revendedora@beauty.com"
+            />
+            
+            <div className="mb-4">
+              <label className="block text-sm text-brand-muted mb-1.5 ml-1">Senha</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted">
+                  <Lock size={20} />
+                </div>
+                <input 
+                  type={showPassword ? "text" : "password"}
+                  className="w-full bg-brand-surface border border-transparent focus:border-brand-primary/50 text-white rounded-xl py-3.5 pl-11 pr-12 outline-none transition-all placeholder-gray-500"
+                  placeholder="********"
+                  defaultValue="123456"
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted hover:text-white"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button type="button" className="text-brand-primary text-sm font-medium hover:underline">
+                Esqueci minha senha
+              </button>
+            </div>
+
+            <Button type="submit">Entrar</Button>
+          </form>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-brand-surface"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-brand-dark text-gray-500">ou</span>
+            </div>
+          </div>
+
+          <Button variant="secondary" onClick={() => alert("Funcionalidade em desenvolvimento")}>
+            Criar conta
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  // -- Dashboard Logic --
+  const DashboardScreen = () => {
+    // Cálculos dinâmicos baseados no estado atual
+    const metrics = useMemo(() => {
+      // 1. Estoque Atual
+      const currentStock = products.reduce((acc, p) => acc + (p.stockQuantity * p.costPrice), 0);
+      
+      // 2. Vendas Totais
+      const totalSales = sales.reduce((acc, s) => acc + s.totalAmount, 0);
+      
+      // 3. Lucro Acumulado
+      const accumulatedProfit = sales.reduce((acc, s) => acc + s.profit, 0);
+      const monthlyProfit = accumulatedProfit;
+
+      // 4. Comissões Digital
+      const digitalCommissions = sales
+        .filter(s => s.type === SaleType.ONLINE)
+        .reduce((acc, s) => acc + s.profit, 0);
+      
+      // 5. Sales by Origin
+      const physicalSales = sales.filter(s => s.type === SaleType.PHYSICAL);
+      const onlineSales = sales.filter(s => s.type === SaleType.ONLINE);
+
+      const physicalTotal = physicalSales.reduce((acc, s) => acc + s.totalAmount, 0);
+      const onlineTotal = onlineSales.reduce((acc, s) => acc + s.totalAmount, 0);
+      
+      const salesByOrigin = [
+        { 
+          name: 'Físico (Presencial)', 
+          value: physicalTotal, 
+          count: physicalSales.length, 
+          color: '#f9a8d4' 
+        }, 
+        { 
+          name: 'Online (Digital)', 
+          value: onlineTotal, 
+          count: onlineSales.length, 
+          color: '#6d4c7d' 
+        } 
+      ];
+
+      const totalCount = sales.length;
+
+      return { 
+        totalSales,
+        currentStock,
+        digitalCommissions,
+        accumulatedProfit,
+        monthlyProfit,
+        lastMonthProfit: 50.00,
+        salesByOrigin,
+        totalCount
+      };
+    }, [products, sales]);
+
+    const chartData = [
+      { name: 'Jan', vendas: 1500 },
+      { name: 'Fev', vendas: 2200 },
+      { name: 'Mar', vendas: 1800 },
+      { name: 'Abr', vendas: 2800 },
+      { name: 'Mai', vendas: 2400 },
+      { name: 'Jun', vendas: metrics.totalSales || 4500 },
+    ];
+
+    const profitGrowth = metrics.lastMonthProfit > 0 
+      ? ((metrics.monthlyProfit - metrics.lastMonthProfit) / metrics.lastMonthProfit) * 100 
+      : 100;
+    
+    // Calculate Percentages for Pie Chart Legend (based on Value $)
+    const totalOriginValue = metrics.salesByOrigin.reduce((acc, curr) => acc + curr.value, 0);
+    const getPercent = (value: number) => totalOriginValue > 0 ? Math.round((value / totalOriginValue) * 100) : 0;
+
+    return (
+      <div className="p-6 space-y-6 pb-24 bg-brand-dark min-h-screen">
+        {/* Header */}
+        <header className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+             <div className="relative">
+                <img 
+                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&q=80" 
+                  alt="Maria Silva" 
+                  className="w-12 h-12 rounded-full border-2 border-brand-surface object-cover" 
+                />
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-brand-dark rounded-full"></span>
+             </div>
+             <div>
+                <p className="text-brand-muted text-xs font-medium">Bem-vinda de volta,</p>
+                <h2 className="text-white font-bold text-lg leading-tight">Maria Silva</h2>
+             </div>
+          </div>
+          <button 
+            onClick={() => setView('settings')}
+            className="w-10 h-10 bg-brand-surface rounded-full flex items-center justify-center border border-white/5 hover:bg-brand-surface/80 transition-colors"
+          >
+            <Settings size={20} className="text-gray-300" />
+          </button>
+        </header>
+
+        {/* Hero Card */}
+        <div className="bg-brand-surface rounded-3xl p-5 relative overflow-hidden border border-white/5 shadow-xl">
+           <div className="flex justify-between items-start mb-2 relative z-10">
+              <span className="text-brand-muted text-[10px] font-semibold tracking-widest uppercase">LUCRO DO MÊS</span>
+              <span className="bg-[#3e2c40] text-brand-primary text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                 <TrendingUp size={12} /> +{profitGrowth.toFixed(0)}%
+              </span>
+           </div>
+           
+           <div className="mb-6 relative z-10">
+              <h1 className="text-4xl font-bold text-white mb-1 tracking-tight">R$ {metrics.monthlyProfit.toFixed(2)}</h1>
+              <p className="text-gray-500 text-xs font-medium">vs. R$ {metrics.lastMonthProfit.toFixed(2)} mês anterior</p>
+           </div>
+           
+           <div className="flex gap-3 relative z-10">
+              <button 
+                onClick={() => setView('new-sale')} 
+                className="flex-1 bg-brand-primary text-brand-dark font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-brand-primaryHover transition-all shadow-lg shadow-brand-primary/25"
+              >
+                 <Plus size={20} strokeWidth={2.5} /> Nova Venda
+              </button>
+              <button 
+                onClick={() => setView('stock')} 
+                className="bg-[#332636] text-gray-300 hover:text-white w-14 rounded-xl flex items-center justify-center transition-colors border border-white/5"
+              >
+                 <Archive size={20} />
+              </button>
+           </div>
+           <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+        </div>
+
+        {/* Visão Geral Grid */}
+        <div>
+          <div className="flex justify-between items-center mb-4 px-1">
+             <h3 className="text-white font-bold text-lg">Visão Geral</h3>
+             <button className="text-brand-primary text-xs font-medium hover:underline">Ver Relatórios</button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+             <div className="bg-brand-surface p-4 rounded-2xl border border-white/5">
+                <div className="w-9 h-9 rounded-full bg-pink-500/10 flex items-center justify-center text-pink-400 mb-3">
+                   <ShoppingBag size={18} />
+                </div>
+                <p className="text-brand-muted text-[10px] mb-1 font-medium">Vendas Totais</p>
+                <p className="text-white font-bold text-lg">R$ {metrics.totalSales.toFixed(2)}</p>
+             </div>
+             <div className="bg-brand-surface p-4 rounded-2xl border border-white/5">
+                <div className="w-9 h-9 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 mb-3">
+                   <Package size={18} />
+                </div>
+                <p className="text-brand-muted text-[10px] mb-1 font-medium">Estoque Atual</p>
+                <p className="text-white font-bold text-lg">R$ {metrics.currentStock.toFixed(2)}</p>
+             </div>
+             <div className="bg-brand-surface p-4 rounded-2xl border border-white/5">
+                <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 mb-3">
+                   <Smartphone size={18} />
+                </div>
+                <p className="text-brand-muted text-[10px] mb-1 font-medium">Comissões Digital</p>
+                <p className="text-white font-bold text-lg">R$ {metrics.digitalCommissions.toFixed(2)}</p>
+             </div>
+             <div className="bg-brand-surface p-4 rounded-2xl border border-white/5 relative overflow-hidden">
+                <div className="w-9 h-9 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400 mb-3 relative z-10">
+                   <PiggyBank size={18} />
+                </div>
+                <p className="text-brand-muted text-[10px] mb-1 font-medium relative z-10">Lucro Acumulado</p>
+                <p className="text-white font-bold text-lg relative z-10">R$ {metrics.accumulatedProfit.toFixed(2)}</p>
+                <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-purple-500/10 rounded-full blur-xl"></div>
+             </div>
+          </div>
+        </div>
+
+        {/* Sales Area Chart */}
+        <Card className="pt-5 pb-2 px-0 overflow-hidden">
+           <div className="px-5 mb-4 flex justify-between items-start">
+             <div>
+               <p className="text-brand-muted text-xs mb-1">Evolução de Vendas</p>
+               <div className="flex items-baseline gap-2">
+                 <h3 className="text-white font-bold text-2xl">R$ {metrics.totalSales.toFixed(2)}</h3>
+                 <span className="text-gray-500 text-[10px]">média/mês</span>
+               </div>
+             </div>
+             <div className="flex bg-[#1a121d] rounded-lg p-0.5">
+               <button className="px-2.5 py-1 rounded-md bg-[#332636] text-white text-[10px] font-medium shadow-sm">6M</button>
+               <button className="px-2.5 py-1 rounded-md text-brand-muted text-[10px] font-medium hover:text-white">1A</button>
+             </div>
+           </div>
+           <div className="h-48 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorVendas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f9a8d4" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#f9a8d4" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#251628', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+                  itemStyle={{ color: '#f9a8d4', fontSize: '12px', fontWeight: 'bold' }}
+                  labelStyle={{ display: 'none' }}
+                  cursor={{ stroke: '#f9a8d4', strokeWidth: 1, strokeDasharray: '3 3' }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="vendas" 
+                  stroke="#f9a8d4" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorVendas)" 
+                  isAnimationActive={false}
+                />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#6b7280', fontSize: 10 }} 
+                  dy={10}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+           </div>
+        </Card>
+
+        {/* Sales Origin Pie Chart */}
+        <Card className="p-5">
+           <h3 className="text-brand-muted text-xs mb-4">Origem das Vendas</h3>
+           <div className="flex items-center gap-6">
+             <div className="relative w-32 h-32 flex-shrink-0">
+               <ResponsiveContainer width="100%" height="100%">
+                 <PieChart>
+                   <Pie
+                     data={metrics.salesByOrigin}
+                     innerRadius={35}
+                     outerRadius={50}
+                     paddingAngle={0}
+                     dataKey="value"
+                     stroke="none"
+                     isAnimationActive={false}
+                   >
+                     {metrics.salesByOrigin.map((entry, index) => (
+                       <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                     ))}
+                   </Pie>
+                 </PieChart>
+               </ResponsiveContainer>
+               {/* Center Text */}
+               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[10px] text-brand-muted">Vendas</span>
+                  <span className="text-xl font-bold text-white">{metrics.totalCount}</span>
+               </div>
+             </div>
+             
+             {/* Legend */}
+             <div className="flex-1 space-y-4">
+                {metrics.salesByOrigin.map((item) => (
+                   <div key={item.name} className="flex flex-col">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
+                        <span className="text-white text-sm font-medium">{item.name}</span>
+                      </div>
+                      <div className="w-full bg-[#1a121d] h-1.5 rounded-full overflow-hidden">
+                        <div 
+                           className="h-full rounded-full" 
+                           style={{ width: `${getPercent(item.value)}%`, backgroundColor: item.color }} 
+                        />
+                      </div>
+                      <div className="flex justify-between items-center mt-1">
+                         <span className="text-xs text-white font-bold">{getPercent(item.value)}%</span>
+                         <span className="text-[10px] text-brand-muted">{item.count} vendas</span>
+                      </div>
+                   </div>
+                ))}
+             </div>
+           </div>
+        </Card>
+      </div>
+    );
+  };
+
+  // -- New Sale Screen --
+  const NewSaleScreen = () => {
+    // Cart now stores unitPrice to allow user override
+    const [cart, setCart] = useState<{product: Product, quantity: number, unitPrice: number}[]>([]);
+    const [saleType, setSaleType] = useState<SaleType>(SaleType.PHYSICAL);
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [discount, setDiscount] = useState('');
+    const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+
+    const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const addToCart = (product: Product) => {
+      const existingItem = cart.find(item => item.product.id === product.id);
+      
+      if (saleType === SaleType.PHYSICAL && product.stockQuantity === 0) {
+        alert("Produto esgotado no estoque físico.");
+        return;
+      }
+
+      // Default Price Logic: Cost + 15% for Physical, Catalog Price for Online
+      const defaultPrice = saleType === SaleType.PHYSICAL 
+         ? product.costPrice * 1.15 
+         : product.salePrice;
+
+      if (existingItem) {
+        if (saleType === SaleType.PHYSICAL && existingItem.quantity >= product.stockQuantity) {
+           alert("Limite de estoque atingido para este item.");
+           return;
+        }
+        setCart(cart.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
+      } else {
+        setCart([...cart, { product, quantity: 1, unitPrice: defaultPrice }]);
+      }
+    };
+
+    const decreaseFromCart = (productId: string) => {
+       const existingItem = cart.find(item => item.product.id === productId);
+       if (existingItem) {
+         if (existingItem.quantity > 1) {
+            setCart(cart.map(item => item.product.id === productId ? { ...item, quantity: item.quantity - 1 } : item));
+         } else {
+            setCart(cart.filter(item => item.product.id !== productId));
+         }
+       }
+    };
+
+    const updateCartItemPrice = (productId: string, newPrice: string) => {
+        const price = parseFloat(newPrice);
+        if(isNaN(price) || price < 0) return;
+        setCart(cart.map(item => 
+            item.product.id === productId ? { ...item, unitPrice: price } : item
+        ));
+    };
+
+    const getQuantityInCart = (productId: string) => {
+      return cart.find(item => item.product.id === productId)?.quantity || 0;
+    };
+
+    // Calculations
+    const subtotal = cart.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+    const totalCost = saleType === SaleType.PHYSICAL 
+        ? cart.reduce((acc, item) => acc + (item.product.costPrice * item.quantity), 0)
+        : 0;
+    
+    const discountValue = useMemo(() => {
+        if (!discount) return 0;
+        const val = parseFloat(discount);
+        if (isNaN(val)) return 0;
+        return discountType === 'percent' ? subtotal * (val / 100) : val;
+    }, [discount, discountType, subtotal]);
+
+    const totalSale = Math.max(0, subtotal - discountValue);
+
+    // Profit Logic: (Revenue - Cost) - Discount
+    // For Online: Revenue * 0.15 (commission) - Discount (assuming discount eats commission)
+    // For Physical: (Revenue - Cost) - Discount
+    const totalProfit = useMemo(() => {
+        if (saleType === SaleType.ONLINE) {
+           const commission = subtotal * 0.15;
+           return commission - discountValue;
+        } else {
+           return (subtotal - totalCost) - discountValue;
+        }
+    }, [subtotal, totalCost, discountValue, saleType]);
+
+    const handleFinalizeSale = () => {
+      if (!selectedCustomerId) {
+        alert("Por favor, selecione um cliente.");
+        return;
+      }
+      if (cart.length === 0) {
+        alert("O carrinho está vazio.");
+        return;
+      }
+
+      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+
+      const newSale: Sale = {
+        id: Date.now().toString(),
+        customerId: selectedCustomerId,
+        customerName: selectedCustomer ? selectedCustomer.name : 'Cliente Desconhecido',
+        date: new Date().toISOString(),
+        type: saleType,
+        totalAmount: totalSale,
+        profit: totalProfit,
+        items: cart.map(item => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice
+        }))
+      };
+
+      setSales([newSale, ...sales]);
+
+      if (saleType === SaleType.PHYSICAL) {
+        const updatedProducts = products.map(p => {
+           const cartItem = cart.find(c => c.product.id === p.id);
+           if (cartItem) {
+             return { ...p, stockQuantity: Math.max(0, p.stockQuantity - cartItem.quantity) };
+           }
+           return p;
+        });
+        setProducts(updatedProducts);
+      }
+
+      const updatedCustomers = customers.map(c => {
+        if (c.id === selectedCustomerId) {
+           return { 
+             ...c, 
+             totalSpent: c.totalSpent + totalSale,
+             lastPurchaseDate: new Date().toISOString()
+           };
+        }
+        return c;
+      });
+      setCustomers(updatedCustomers);
+
+      setView('sales');
+    };
+
+    return (
+      <div className="flex flex-col h-screen bg-brand-dark">
+         {/* Header */}
+         <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-4 bg-brand-dark/90 backdrop-blur-md border-b border-white/5">
+            <button onClick={() => setView('dashboard')} className="flex w-10 h-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors">
+               <X className="text-white" size={24} />
+            </button>
+            <h1 className="text-lg font-bold text-white tracking-tight flex-1 text-center">Nova Venda</h1>
+            <button className="flex w-10 h-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors">
+               <HelpCircle className="text-brand-primary" size={24} />
+            </button>
+         </header>
+
+         <main className="flex-1 flex flex-col px-4 pt-2 pb-24 gap-6 overflow-y-auto">
+            {/* Sale Type Toggle */}
+            <div className="w-full">
+               <div className="flex h-12 w-full items-center justify-center rounded-xl bg-[#2A4535]/30 p-1 border border-white/5">
+                  <button 
+                     onClick={() => setSaleType(SaleType.PHYSICAL)}
+                     className={`h-full grow flex items-center justify-center rounded-lg transition-all duration-200 text-sm font-semibold ${saleType === SaleType.PHYSICAL ? 'bg-[#2A4535] text-white shadow-sm' : 'text-brand-muted hover:bg-white/5'}`}
+                  >
+                     Estoque Físico
+                  </button>
+                  <button 
+                     onClick={() => setSaleType(SaleType.ONLINE)}
+                     className={`h-full grow flex items-center justify-center rounded-lg transition-all duration-200 text-sm font-semibold ${saleType === SaleType.ONLINE ? 'bg-purple-600 text-white shadow-sm' : 'text-brand-muted hover:bg-white/5'}`}
+                  >
+                     Venda Online
+                  </button>
+               </div>
+               <p className="mt-2 text-xs text-center text-brand-muted">
+                  {saleType === SaleType.PHYSICAL ? 'Preço sugerido: Custo Médio + 15%' : 'Comissão fixa de 15% sobre a venda'}
+               </p>
+            </div>
+
+            {/* Customer Select */}
+            <div className="flex flex-col gap-2">
+               <label className="text-sm font-semibold text-gray-300 ml-1">Cliente</label>
+               <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-brand-muted">
+                     <Users size={20} />
+                  </div>
+                  <select 
+                     value={selectedCustomerId}
+                     onChange={(e) => setSelectedCustomerId(e.target.value)}
+                     className="w-full appearance-none rounded-xl bg-brand-surface py-4 pl-10 pr-10 text-base shadow-sm border border-white/10 focus:border-brand-primary text-white transition-all outline-none"
+                  >
+                     <option value="" disabled>Selecionar cliente...</option>
+                     {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-brand-muted">
+                     <ChevronDown size={20} />
+                  </div>
+               </div>
+               <button onClick={() => setView('add-customer')} className="flex items-center gap-1 ml-1 text-xs text-brand-primary font-medium hover:text-white transition-colors self-start">
+                  <UserPlus size={14} /> Novo Cliente Rápido
+               </button>
+            </div>
+
+            {/* Product Search & Filter */}
+            <div className="flex flex-col gap-2">
+               <label className="text-sm font-semibold text-gray-300 ml-1">Produto</label>
+               <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-brand-muted">
+                     <Search size={20} />
+                  </div>
+                  <input 
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
+                     className="w-full rounded-xl bg-brand-surface py-4 pl-10 pr-12 text-base shadow-sm border border-white/10 focus:border-brand-primary text-white placeholder-gray-500 outline-none transition-all" 
+                     placeholder="Buscar produto por nome..." 
+                     type="text"
+                  />
+                  <button className="absolute inset-y-0 right-0 flex items-center pr-3 text-brand-muted hover:text-brand-primary transition-colors">
+                     <ScanBarcode size={20} />
+                  </button>
+               </div>
+               {/* Brand Chips */}
+               <div className="flex gap-2 mt-1 overflow-x-auto pb-2 scrollbar-hide">
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-surface border border-white/10 hover:border-brand-primary/50 transition-all shadow-sm">
+                     <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                     <span className="text-xs font-medium whitespace-nowrap text-white">Natura</span>
+                  </button>
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-surface border border-white/10 hover:border-brand-primary/50 transition-all shadow-sm">
+                     <div className="w-2 h-2 rounded-full bg-red-600"></div>
+                     <span className="text-xs font-medium whitespace-nowrap text-white">Avon</span>
+                  </button>
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-surface border border-white/10 hover:border-brand-primary/50 transition-all shadow-sm">
+                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                     <span className="text-xs font-medium whitespace-nowrap text-white">Outros</span>
+                  </button>
+               </div>
+            </div>
+
+            {/* Product List / Cart */}
+            <div className="flex flex-col gap-3 mt-1">
+               <div className="flex items-center justify-between px-1">
+                  <h3 className="text-sm font-semibold text-brand-muted uppercase tracking-wider">{cart.length > 0 ? 'Itens no Carrinho' : 'Sugestões Recentes'}</h3>
+               </div>
+               
+               {/* Logic: If searching OR cart has items, show results/cart. Else show recent suggestions */}
+               {(searchTerm || cart.length > 0 ? (searchTerm ? filteredProducts : cart.map(c => c.product)) : products.slice(0, 3)).map((product, idx) => {
+                  const qty = getQuantityInCart(product.id);
+                  const cartItem = cart.find(c => c.product.id === product.id);
+                  const isOutOfStock = saleType === SaleType.PHYSICAL && product.stockQuantity === 0;
+                  
+                  // Deduplicate display if showing cart (avoid showing same product twice if search is empty)
+                  if (searchTerm === '' && cart.length > 0 && idx >= cart.length) return null;
+
+                  return (
+                     <div key={product.id} className={`flex flex-col rounded-xl bg-brand-surface p-3 shadow-sm border border-white/5 hover:border-brand-primary/30 transition-all text-left group ${isOutOfStock ? 'opacity-50' : ''}`}>
+                        <div className="flex items-center gap-4">
+                           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary overflow-hidden">
+                              {/* Icon based on category approximation */}
+                              {product.category.includes('Perfumaria') ? <SprayCan size={20} /> : 
+                               product.category.includes('Maquiagem') ? <Brush size={20} /> : <Package size={20} />}
+                           </div>
+                           <div className="flex-1 min-w-0">
+                              <p className="truncate text-sm font-medium text-white group-hover:text-brand-primary transition-colors">{product.name}</p>
+                              <div className="flex flex-col">
+                                 <p className="truncate text-xs text-brand-muted">{product.brand}</p>
+                                 {saleType === SaleType.PHYSICAL && (
+                                    <span className="text-[10px] text-brand-muted flex items-center gap-1">
+                                       Custo: R$ {product.costPrice.toFixed(2)}
+                                    </span>
+                                 )}
+                              </div>
+                           </div>
+                           
+                           {/* Qty Control */}
+                           {qty > 0 ? (
+                               <div className="flex items-center bg-[#1a121d] rounded-lg">
+                                  <button onClick={() => decreaseFromCart(product.id)} className="p-2 text-brand-muted hover:text-white"><Minus size={16} /></button>
+                                  <span className="text-sm font-bold text-white w-4 text-center">{qty}</span>
+                                  <button onClick={() => addToCart(product)} className="p-2 text-brand-primary hover:text-white"><Plus size={16} /></button>
+                               </div>
+                           ) : (
+                              <button onClick={() => addToCart(product)} disabled={isOutOfStock} className="flex items-center gap-1 text-brand-muted group-hover:text-brand-primary p-2">
+                                 <Plus size={24} />
+                              </button>
+                           )}
+                        </div>
+
+                        {/* Price Input (Only show if in cart) */}
+                        {qty > 0 && cartItem && (
+                           <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between animate-fade-in">
+                              <span className="text-xs text-brand-muted">Preço Unitário</span>
+                              <div className="flex items-center gap-2">
+                                 <span className="text-xs text-brand-muted">R$</span>
+                                 <input 
+                                    type="number"
+                                    value={cartItem.unitPrice}
+                                    onChange={(e) => updateCartItemPrice(product.id, e.target.value)}
+                                    className="w-20 bg-[#1a121d] text-white text-right text-sm font-medium rounded p-1 border border-white/10 focus:border-brand-primary outline-none"
+                                 />
+                              </div>
+                           </div>
+                        )}
+                     </div>
+                  );
+               })}
+            </div>
+
+            {/* Discount Section */}
+            {cart.length > 0 && (
+               <div className="flex flex-col gap-2 animate-fade-in">
+                  <label className="text-sm font-semibold text-gray-300 ml-1 flex justify-between items-center">
+                     Cupom de Desconto
+                     <span className="text-xs font-normal text-brand-muted">Opcional</span>
+                  </label>
+                  <div className="flex gap-2">
+                     <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-brand-muted">
+                           <Tag size={18} />
+                        </div>
+                        <input 
+                           value={discount}
+                           onChange={(e) => setDiscount(e.target.value)}
+                           className="w-full rounded-xl bg-brand-surface py-3 pl-10 pr-3 text-sm shadow-sm border border-white/10 focus:border-brand-primary text-white outline-none" 
+                           placeholder="Código ou Valor" 
+                           type="number"
+                        />
+                     </div>
+                     <select 
+                        value={discountType}
+                        onChange={(e) => setDiscountType(e.target.value as any)}
+                        className="w-24 rounded-xl bg-brand-surface py-3 pl-3 pr-8 text-sm font-medium shadow-sm border border-white/10 focus:border-brand-primary text-white outline-none"
+                     >
+                        <option value="percent">%</option>
+                        <option value="fixed">R$</option>
+                     </select>
+                  </div>
+               </div>
+            )}
+
+            {/* Financial Summary Card */}
+            {cart.length > 0 && (
+               <div className="mt-2 rounded-2xl bg-gradient-to-br from-brand-surface to-[#15201b] p-5 shadow-lg border border-white/5 animate-fade-in">
+                  <div className="flex items-center justify-between mb-2">
+                     <span className="text-sm font-medium text-brand-muted">Subtotal</span>
+                     <span className="text-sm font-medium text-white">R$ {subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                     <span className="text-sm font-medium text-brand-muted flex items-center gap-1">
+                        Desconto
+                        <Info size={14} />
+                     </span>
+                     <span className="text-sm font-medium text-red-400">- R$ {discountValue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-4">
+                     <span className="text-sm font-medium text-brand-muted">Lucro Estimado</span>
+                     <span className={`text-sm font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-500'}`}>
+                        {totalProfit >= 0 ? '+' : ''} R$ {totalProfit.toFixed(2)}
+                     </span>
+                  </div>
+                  <div className="h-px w-full bg-white/10 mb-4"></div>
+                  <div className="flex items-center justify-between">
+                     <span className="text-lg font-bold text-white">Total a Receber</span>
+                     <div className="flex flex-col items-end">
+                        <span className="text-2xl font-bold tracking-tight text-white">R$ {totalSale.toFixed(2)}</span>
+                        <span className="text-[10px] text-brand-muted font-medium uppercase tracking-wide">Com Preço Editável</span>
+                     </div>
+                  </div>
+               </div>
+            )}
+         </main>
+
+         {/* Fixed Bottom Button */}
+         <div className="fixed bottom-0 left-0 right-0 z-30 bg-brand-dark p-4 border-t border-white/5 max-w-md mx-auto">
+            <button 
+               onClick={handleFinalizeSale}
+               className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-primary py-4 px-6 text-base font-bold text-brand-dark shadow-[0_0_20px_rgba(249,168,212,0.3)] hover:brightness-105 active:scale-[0.98] transition-all"
+            >
+               <CheckCircle2 className="fill-current" />
+               Confirmar Venda
+            </button>
+         </div>
+      </div>
+    );
+  };
+
+  // ... (Other screens would go here, preserved in logic below) ...
+  
+  // -- Settings Screen --
+  const SettingsScreen = () => {
+    return (
+      <div className="p-6 pb-24 h-screen flex flex-col bg-brand-dark">
+         <div className="flex items-center gap-4 mb-8">
+           <button onClick={() => setView('dashboard')} className="text-white">
+             <ArrowLeft size={24} />
+           </button>
+           <h2 className="text-2xl font-bold text-white">Configurações</h2>
+         </div>
+
+         <div className="flex-1 overflow-y-auto space-y-8">
+            <section>
+              <h3 className="text-brand-muted text-[10px] font-bold uppercase tracking-wider mb-3">Financeiro</h3>
+              <div className="bg-brand-surface rounded-2xl p-4 border border-white/5 space-y-4">
+                 <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm text-white font-medium">Comissão Online Padrão</label>
+                      <span className="text-[10px] bg-[#332636] text-brand-muted px-2 py-0.5 rounded">% por venda</span>
+                    </div>
+                    <div className="relative">
+                       <input 
+                         type="number" 
+                         defaultValue={15}
+                         className="w-full bg-[#1a121d] text-white rounded-xl py-3 px-4 outline-none border border-transparent focus:border-brand-primary/50"
+                       />
+                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted font-bold">%</span>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setView('credit-cards')}
+                   className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-[#1a121d] transition-colors group"
+                 >
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full bg-[#332636] flex items-center justify-center text-brand-primary">
+                          <CreditCard size={20} />
+                       </div>
+                       <div className="text-left">
+                          <p className="text-white font-medium text-sm">Cartões de Crédito</p>
+                          <p className="text-brand-muted text-xs">Visa •••• 4242</p>
+                       </div>
+                    </div>
+                    <ChevronRight size={18} className="text-brand-muted group-hover:text-white" />
+                 </button>
+              </div>
+            </section>
+            <section>
+              <h3 className="text-brand-muted text-[10px] font-bold uppercase tracking-wider mb-3">Estoque & Operacional</h3>
+              <div className="bg-brand-surface rounded-2xl p-4 border border-white/5 space-y-4">
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className="text-xs text-white font-medium mb-1.5 block">Alerta de Estoque Mínimo</label>
+                       <div className="relative">
+                          <input 
+                             type="number" 
+                             defaultValue={5} 
+                             className="w-full bg-[#1a121d] text-white rounded-xl py-3 px-3 text-sm outline-none border border-transparent"
+                          />
+                          <Package size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+                       </div>
+                    </div>
+                    <div>
+                       <label className="text-xs text-white font-medium mb-1.5 block">Produto Parado (Dias)</label>
+                       <div className="relative">
+                          <select className="w-full bg-[#1a121d] text-white rounded-xl py-3 px-3 text-sm outline-none border border-transparent appearance-none">
+                            <option>30 dias</option>
+                            <option selected>60 dias</option>
+                            <option>90 dias</option>
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+                       </div>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setView('manage-brands')}
+                   className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-[#1a121d] transition-colors group"
+                 >
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full bg-[#332636] flex items-center justify-center text-brand-primary">
+                          <CheckCircle2 size={20} />
+                       </div>
+                       <div className="text-left">
+                          <p className="text-white font-medium text-sm">Gerenciar Marcas</p>
+                          <div className="flex gap-1 mt-0.5">
+                             <span className="text-[9px] bg-pink-500/20 text-pink-300 px-1.5 rounded">NATURA</span>
+                             <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 rounded">AVON</span>
+                             <span className="text-[9px] bg-gray-700 text-gray-300 px-1.5 rounded">+1</span>
+                          </div>
+                       </div>
+                    </div>
+                    <ChevronRight size={18} className="text-brand-muted group-hover:text-white" />
+                 </button>
+                 <button 
+                   onClick={() => setView('categories')}
+                   className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-[#1a121d] transition-colors group"
+                 >
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full bg-[#332636] flex items-center justify-center text-brand-primary">
+                          <MoreHorizontal size={20} />
+                       </div>
+                       <div className="text-left">
+                          <p className="text-white font-medium text-sm">Gerenciar Categorias</p>
+                          <p className="text-brand-muted text-xs">Perfumaria, Maquiagem...</p>
+                       </div>
+                    </div>
+                    <ChevronRight size={18} className="text-brand-muted group-hover:text-white" />
+                 </button>
+              </div>
+            </section>
+             <section>
+              <h3 className="text-brand-muted text-[10px] font-bold uppercase tracking-wider mb-3">Aplicativo</h3>
+              <div className="bg-brand-surface rounded-2xl p-4 border border-white/5">
+                 <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                       <Bell size={20} className="text-brand-muted" />
+                       <span className="text-white font-medium text-sm">Notificações Push</span>
+                    </div>
+                    <Toggle checked={true} onChange={() => {}} />
+                 </div>
+              </div>
+            </section>
+            <button 
+               onClick={() => setView('login')}
+               className="w-full border border-brand-primary/30 text-brand-primary font-medium py-3.5 rounded-xl hover:bg-brand-primary/5 transition-colors flex items-center justify-center gap-2"
+            >
+               <LogOut size={18} /> SAIR
+            </button>
+            <p className="text-center text-xs text-brand-muted pb-4">Versão 2.4.0</p>
+         </div>
+      </div>
+    );
+  };
+
+  // -- Credit Cards Screen --
+  const CreditCardsScreen = () => {
+    const [cards, setCards] = useState([
+      { id: 1, name: 'Nubank', due: '05', active: true, color: 'bg-purple-600', icon: 'NB' },
+      { id: 2, name: 'Bradesco', due: '10', active: true, color: 'bg-red-600', icon: 'BR' },
+      { id: 3, name: 'C6 Bank', due: '01', active: true, color: 'bg-gray-800', icon: 'C6' },
+      { id: 4, name: 'Caixa Econômica', due: '', active: false, color: 'bg-blue-600', icon: 'CX' },
+    ]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingCard, setEditingCard] = useState<any>(null);
+    const [formData, setFormData] = useState({ name: '', due: '', bankIndex: 0 });
+
+    const handleToggle = (id: number) => {
+      setCards(cards.map(c => c.id === id ? { ...c, active: !c.active } : c));
+    };
+    const handleDelete = (id: number) => {
+      requestDelete(
+        'Excluir Cartão?',
+        'Tem certeza que deseja excluir este cartão? Esta ação não poderá ser desfeita.',
+        () => setCards(cards.filter(c => c.id !== id))
+      );
+    };
+    const handleOpenAdd = () => {
+      setEditingCard(null);
+      setFormData({ name: '', due: '', bankIndex: 0 });
+      setIsModalOpen(true);
+    };
+    const handleOpenEdit = (card: any) => {
+      setEditingCard(card);
+      const bankIndex = BANKS_PRESETS.findIndex(b => card.name.includes(b.name));
+      setFormData({ 
+         name: card.name, 
+         due: card.due, 
+         bankIndex: bankIndex !== -1 ? bankIndex : 8
+      });
+      setIsModalOpen(true);
+    };
+    const handleSave = () => {
+      const selectedBank = BANKS_PRESETS[formData.bankIndex];
+      const finalName = formData.name.trim() || selectedBank.name;
+      if (editingCard) {
+        setCards(cards.map(c => c.id === editingCard.id ? {
+          ...c,
+          name: finalName,
+          due: formData.due,
+          color: selectedBank.color,
+          icon: selectedBank.icon
+        } : c));
+      } else {
+        const newCard = {
+          id: Date.now(),
+          name: finalName,
+          due: formData.due,
+          active: true,
+          color: selectedBank.color,
+          icon: selectedBank.icon
+        };
+        setCards([...cards, newCard]);
+      }
+      setIsModalOpen(false);
+    };
+
+    return (
+      <div className="p-6 h-screen flex flex-col bg-brand-dark relative">
+        <div className="flex items-center gap-4 mb-6">
+           <button onClick={() => setView('settings')} className="text-white">
+             <ArrowLeft size={24} />
+           </button>
+           <h2 className="text-xl font-bold text-white">Cartões de Crédito</h2>
+         </div>
+         <button 
+            onClick={handleOpenAdd}
+            className="w-full border border-dashed border-brand-muted/30 text-white py-4 rounded-xl mb-6 flex items-center justify-center gap-2 hover:bg-brand-surface transition-colors"
+         >
+            <Plus size={18} /> Adicionar Novo Cartão
+         </button>
+         <h3 className="text-brand-muted text-[10px] font-bold uppercase tracking-wider mb-3">Meus Cartões</h3>
+         <div className="flex-1 overflow-y-auto space-y-3 pb-6">
+            {cards.length === 0 && (
+               <div className="text-center py-10 text-brand-muted text-sm">Nenhum cartão cadastrado.</div>
+            )}
+            {cards.map(card => (
+               <div key={card.id} className={`bg-brand-surface rounded-xl p-4 border border-white/5 ${!card.active && 'opacity-60'}`}>
+                  <div className="flex justify-between items-start mb-4">
+                     <div className="flex items-center gap-3">
+                        <div className={`w-10 h-8 rounded-md ${card.color} flex items-center justify-center text-[10px] font-bold text-white shadow-sm`}>
+                           {card.icon}
+                        </div>
+                        <div>
+                           <h4 className="text-white font-medium text-sm">{card.name}</h4>
+                           <p className="text-xs text-brand-muted">{card.due ? `Vence dia ${card.due}` : 'Sem data de vencimento'}</p>
+                        </div>
+                     </div>
+                     <Toggle checked={card.active} onChange={() => handleToggle(card.id)} />
+                  </div>
+                  <div className="flex gap-4 pt-3 border-t border-white/5">
+                     <button onClick={() => handleOpenEdit(card)} className="flex items-center gap-1.5 text-xs text-brand-muted hover:text-white transition-colors">
+                        <Edit2 size={12} /> Editar
+                     </button>
+                     <button onClick={() => handleDelete(card.id)} className="flex items-center gap-1.5 text-xs text-brand-muted hover:text-red-400 transition-colors ml-auto">
+                        <Trash2 size={12} /> Remover
+                     </button>
+                  </div>
+               </div>
+            ))}
+         </div>
+         {isModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+               <div className="bg-brand-surface w-full max-w-sm rounded-2xl p-6 border border-white/10 shadow-2xl relative">
+                  <button onClick={() => setIsModalOpen(false)} className="absolute right-4 top-4 text-brand-muted hover:text-white"><X size={20} /></button>
+                  <h3 className="text-xl font-bold text-white mb-6">{editingCard ? 'Editar Cartão' : 'Novo Cartão'}</h3>
+                  <div className="space-y-4 mb-6">
+                     <div>
+                        <label className="text-xs text-brand-muted mb-2 block font-medium uppercase tracking-wider">Banco / Emissor</label>
+                        <div className="relative">
+                           <select 
+                              value={formData.bankIndex}
+                              onChange={(e) => {
+                                 const idx = Number(e.target.value);
+                                 const presetName = BANKS_PRESETS[idx].name;
+                                 setFormData({ ...formData, bankIndex: idx, name: presetName === 'Outro' ? '' : presetName });
+                              }}
+                              className="w-full bg-[#1a121d] text-white rounded-xl py-3 px-4 outline-none appearance-none border border-transparent focus:border-brand-primary/50"
+                           >
+                              {BANKS_PRESETS.map((b, idx) => (<option key={b.name} value={idx}>{b.name}</option>))}
+                           </select>
+                           <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" size={18} />
+                        </div>
+                     </div>
+                     <div className="bg-[#1a121d] p-3 rounded-xl border border-white/5 flex items-center gap-3">
+                        <div className={`w-10 h-8 rounded-md ${BANKS_PRESETS[formData.bankIndex].color} flex items-center justify-center text-[10px] font-bold text-white shadow-sm flex-shrink-0`}>
+                           {BANKS_PRESETS[formData.bankIndex].icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <label className="text-[10px] text-brand-muted block mb-0.5">Nome do Cartão (Apelido)</label>
+                           <input 
+                              value={formData.name}
+                              onChange={(e) => setFormData({...formData, name: e.target.value})}
+                              placeholder={BANKS_PRESETS[formData.bankIndex].name}
+                              className="w-full bg-transparent text-white text-sm font-medium outline-none placeholder-gray-600"
+                           />
+                        </div>
+                     </div>
+                     <div>
+                        <label className="text-xs text-brand-muted mb-2 block font-medium uppercase tracking-wider">Dia do Vencimento</label>
+                        <div className="relative">
+                           <input 
+                              type="number" min="1" max="31" value={formData.due}
+                              onChange={(e) => setFormData({...formData, due: e.target.value})}
+                              placeholder="Ex: 10"
+                              className="w-full bg-[#1a121d] text-white rounded-xl py-3 px-4 outline-none border border-transparent focus:border-brand-primary/50"
+                           />
+                           <Calendar size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+                        </div>
+                     </div>
+                  </div>
+                  <div className="flex gap-3">
+                     <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                     <Button onClick={handleSave}>Salvar</Button>
+                  </div>
+               </div>
+            </div>
+         )}
+      </div>
+    )
+  }
+
+  // -- Manage Brands Screen --
+  const ManageBrandsScreen = () => {
+    const [brandsList, setBrandsList] = useState([
+       { id: 1, name: 'Natura', count: '24 produtos cadastrados', active: true },
+       { id: 2, name: 'Avon', count: '18 produtos cadastrados', active: true },
+       { id: 3, name: 'O Boticário', count: '8 produtos cadastrados', active: true },
+       { id: 4, name: 'Eudora', count: '12 produtos cadastrados', active: true }
+    ]);
+    const [editingBrand, setEditingBrand] = useState<any>(null);
+    const [isAddingBrand, setIsAddingBrand] = useState(false);
+    const [tempName, setTempName] = useState('');
+
+    const toggleBrand = (id: number) => {
+      setBrandsList(brandsList.map(b => b.id === id ? { ...b, active: !b.active } : b));
+    };
+    const handleEditClick = (brand: any) => {
+      setEditingBrand(brand);
+      setTempName(brand.name);
+    };
+    const handleAddClick = () => {
+       setIsAddingBrand(true);
+       setTempName('');
+    }
+    const saveBrandName = () => {
+      if (editingBrand && tempName.trim()) {
+        setBrandsList(brandsList.map(b => b.id === editingBrand.id ? { ...b, name: tempName } : b));
+        setEditingBrand(null);
+      }
+    };
+    const saveNewBrand = () => {
+      if (tempName.trim()) {
+         const newBrand = {
+            id: Date.now(),
+            name: tempName,
+            count: '0 produtos cadastrados',
+            active: true
+         };
+         setBrandsList([...brandsList, newBrand]);
+         setIsAddingBrand(false);
+      }
+    }
+
+    return (
+      <div className="p-6 h-screen flex flex-col bg-brand-dark relative">
+         <div className="flex items-center gap-4 mb-6">
+           <button onClick={() => setView('settings')} className="text-white"><ArrowLeft size={24} /></button>
+           <h2 className="text-2xl font-bold text-white">Gerenciar Marcas</h2>
+         </div>
+         <p className="text-sm text-brand-muted mb-6 leading-relaxed">Gerencie as marcas de cosméticos que você revende. Ative ou desative marcas para controlar quais aparecem no cadastro de produtos.</p>
+         <div className="flex-1 overflow-y-auto space-y-3">
+            {brandsList.map(brand => (
+               <div key={brand.id} className={`bg-brand-surface rounded-2xl p-4 flex items-center justify-between border border-white/5 transition-opacity ${!brand.active ? 'opacity-60' : ''}`}>
+                  <div className="flex items-center gap-4">
+                     <BrandLogo brand={brand.name} />
+                     <div>
+                        <h4 className="text-white font-medium text-sm">{brand.name}</h4>
+                        <p className="text-xs text-brand-muted">{brand.count}</p>
+                     </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                      <Toggle checked={brand.active} onChange={() => toggleBrand(brand.id)} />
+                      <button onClick={() => handleEditClick(brand)} className="w-8 h-8 rounded-full bg-[#1a121d] flex items-center justify-center text-brand-muted hover:text-white transition-colors">
+                         <Edit2 size={14} />
+                      </button>
+                  </div>
+               </div>
+            ))}
+         </div>
+         <Button className="mt-4" onClick={handleAddClick}><Plus size={20} /> Adicionar Nova Marca</Button>
+         {editingBrand && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+             <div className="bg-brand-surface w-full max-w-sm rounded-2xl p-6 border border-white/10 shadow-2xl relative">
+                <button onClick={() => setEditingBrand(null)} className="absolute right-4 top-4 text-brand-muted hover:text-white"><X size={20} /></button>
+                <h3 className="text-xl font-bold text-white mb-6">Editar Marca</h3>
+                <div className="mb-6">
+                  <label className="text-xs text-brand-muted mb-2 block font-medium uppercase tracking-wider">Nome da Marca</label>
+                  <div className="relative">
+                     <input value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full bg-[#1a121d] border border-transparent focus:border-brand-primary/50 rounded-xl p-4 text-white outline-none" autoFocus />
+                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 scale-75"><BrandLogo brand={tempName} /></div>
+                  </div>
+                </div>
+                <div className="flex gap-3"><Button variant="secondary" onClick={() => setEditingBrand(null)}>Cancelar</Button><Button onClick={saveBrandName}>Salvar</Button></div>
+             </div>
+           </div>
+         )}
+         {isAddingBrand && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+             <div className="bg-brand-surface w-full max-w-sm rounded-2xl p-6 border border-white/10 shadow-2xl relative">
+                <button onClick={() => setIsAddingBrand(false)} className="absolute right-4 top-4 text-brand-muted hover:text-white"><X size={20} /></button>
+                <h3 className="text-xl font-bold text-white mb-6">Nova Marca</h3>
+                <div className="mb-6">
+                  <label className="text-xs text-brand-muted mb-2 block font-medium uppercase tracking-wider">Nome da Marca</label>
+                  <div className="relative">
+                     <input value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full bg-[#1a121d] border border-transparent focus:border-brand-primary/50 rounded-xl p-4 text-white outline-none" placeholder="Ex: Jequiti" autoFocus />
+                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 scale-75"><BrandLogo brand={tempName} /></div>
+                  </div>
+                </div>
+                <div className="flex gap-3"><Button variant="secondary" onClick={() => setIsAddingBrand(false)}>Cancelar</Button><Button onClick={saveNewBrand}>Adicionar</Button></div>
+             </div>
+           </div>
+         )}
+      </div>
+    )
+  }
+
+  // -- Inventory / Stock Screen --
+  const StockScreen = () => {
+    const [filter, setFilter] = useState('');
+    const [brandFilter, setBrandFilter] = useState<'Todas' | Brand | 'Baixo Estoque'>('Todas');
+
+    const totalInvested = products.reduce((acc, p) => acc + (p.costPrice * p.stockQuantity), 0);
+    const filteredProducts = products.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(filter.toLowerCase());
+      if (brandFilter === 'Todas') return matchesSearch;
+      if (brandFilter === 'Baixo Estoque') return matchesSearch && p.stockQuantity < 3;
+      return matchesSearch && p.brand === brandFilter;
+    });
+
+    const handleDeleteProduct = (e: React.MouseEvent, id: string, name: string) => {
+      e.stopPropagation();
+      requestDelete(
+        'Excluir Produto?',
+        `Tem certeza que deseja excluir "${name}"? Esta ação não poderá ser desfeita.`,
+        () => setProducts(products.filter(p => p.id !== id))
+      );
+    };
+
+    const getStatusBadge = (stock: number) => {
+      if (stock === 0) return <span className="bg-red-500/10 text-red-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-red-500/20">Esgotado</span>;
+      if (stock < 3) return <span className="bg-yellow-500/10 text-yellow-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-yellow-500/20">Baixo</span>;
+      return null;
+    }
+
+    return (
+      <div className="p-6 pb-24 h-screen flex flex-col bg-brand-dark">
+        <div className="flex justify-between items-start mb-6">
+           <div className="flex items-center gap-3">
+             <button onClick={() => setView('dashboard')} className="text-white hover:text-brand-primary"><ArrowLeft size={24} /></button>
+             <div><h2 className="text-2xl font-bold text-white leading-none">Estoque</h2><p className="text-brand-muted text-xs mt-1">Gerencie seus produtos</p></div>
+           </div>
+           <div className="text-right">
+              <span className="text-[10px] text-brand-muted font-bold tracking-wider uppercase">TOTAL INVESTIDO</span>
+              <p className="text-brand-primary font-bold text-lg">R$ {totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+           </div>
+        </div>
+        <div className="mb-4">
+           <div className="flex gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" size={18} />
+              <input type="text" placeholder="Buscar por nome, marca..." className="w-full bg-brand-surface text-white pl-10 pr-4 py-3 rounded-xl text-sm outline-none focus:ring-1 ring-brand-primary border border-white/5" value={filter} onChange={e => setFilter(e.target.value)} />
+            </div>
+            <div className="flex gap-1">
+              <button className="bg-brand-surface p-3 rounded-xl text-brand-muted border border-white/5 hover:text-white"><Filter size={20} /></button>
+              <button className="bg-brand-surface p-3 rounded-xl text-brand-muted border border-white/5 hover:text-white" onClick={() => setView('categories')}><MoreHorizontal size={20} /></button>
+            </div>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {[{ id: 'Todas', label: 'Todos' }, { id: 'Baixo Estoque', label: 'Baixo Estoque' }, { id: Brand.NATURA, label: 'Natura' }, { id: Brand.AVON, label: 'Avon' }].map(b => (
+              <button key={b.id} onClick={() => setBrandFilter(b.id as any)} className={`px-5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${brandFilter === b.id ? 'bg-white text-brand-dark' : 'bg-brand-surface text-brand-muted border border-white/5'}`}>{b.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {filteredProducts.map(product => (
+            <div key={product.id} className="bg-brand-surface p-3 rounded-2xl flex gap-3 items-center border border-white/5 relative overflow-hidden group">
+              <div className={`absolute left-0 top-0 bottom-0 w-1 ${product.brand === Brand.NATURA ? 'bg-orange-500' : 'bg-pink-500'}`}></div>
+              <div className="w-16 h-16 rounded-lg bg-gray-800 flex-shrink-0 overflow-hidden ml-2"><img src={product.image} alt={product.name} className="w-full h-full object-cover" /></div>
+              <div className="flex-1 min-w-0 py-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-[9px] font-bold uppercase ${product.brand === Brand.NATURA ? 'text-orange-400' : 'text-pink-400'}`}>{product.brand}</span>
+                  <span className="w-1 h-1 bg-gray-600 rounded-full"></span>
+                  <span className="text-[10px] text-brand-muted">{product.category}</span>
+                  {getStatusBadge(product.stockQuantity)}
+                </div>
+                <h4 className="text-white font-semibold text-sm truncate mb-1 leading-tight">{product.name}</h4>
+                <p className="text-brand-muted font-medium text-xs">R$ {product.salePrice.toFixed(2)}</p>
+              </div>
+              <div className="flex flex-col items-end pr-1 gap-2">
+                 <div className="text-right">
+                    <span className={`text-[9px] font-bold uppercase tracking-wider mb-0.5 ${product.stockQuantity < 3 ? 'text-yellow-500' : 'text-brand-muted'}`}>{product.stockQuantity < 3 ? 'Restam' : 'Estoque'}</span>
+                    <div className="flex items-baseline justify-end gap-1">
+                      <span className={`text-xl font-bold leading-none ${product.stockQuantity === 0 ? 'text-red-500' : 'text-white'}`}>{product.stockQuantity}</span>
+                      <span className="text-[9px] text-brand-muted">unid.</span>
+                    </div>
+                 </div>
+                 <button onClick={(e) => handleDeleteProduct(e, product.id, product.name)} className="p-1.5 bg-white/5 rounded-full text-brand-muted hover:text-red-400 hover:bg-white/10 transition-colors">
+                    <Trash2 size={14} />
+                 </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => setView('add-product')} className="absolute bottom-20 right-6 w-14 h-14 bg-brand-primary rounded-full flex items-center justify-center shadow-lg shadow-brand-primary/30 text-brand-dark hover:scale-110 transition-transform"><Plus size={28} /></button>
+      </div>
+    );
+  };
+
+  // -- Add Product Screen --
+  const AddProductScreen = () => {
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const form = e.target as HTMLFormElement;
+      const formData = new FormData(form);
+      const newProduct: Product = {
+        id: Math.random().toString(),
+        name: formData.get('name') as string,
+        brand: formData.get('brand') as Brand,
+        category: formData.get('category') as string,
+        stockQuantity: Number(formData.get('quantity')),
+        costPrice: 0, 
+        salePrice: 0,
+        image: 'https://picsum.photos/100/100?random=' + Math.random()
+      };
+      setProducts([...products, newProduct]);
+      setView('stock');
+    };
+
+    return (
+      <div className="h-screen flex flex-col bg-brand-dark relative">
+        <div className="flex items-center justify-between p-6">
+          <button onClick={() => setView('stock')} className="text-brand-muted text-sm font-medium hover:text-white">Cancelar</button>
+          <h2 className="text-lg font-bold text-white">Novo Produto</h2>
+          <div className="w-16"></div>
+        </div>
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 pb-24">
+           <div className="w-full h-40 bg-brand-surface/30 border-2 border-dashed border-brand-primary/20 rounded-2xl flex flex-col items-center justify-center mb-6">
+              <div className="w-12 h-12 bg-brand-surface rounded-full flex items-center justify-center text-brand-muted mb-2"><ImageIcon size={24} /></div>
+              <span className="text-xs text-brand-muted">Nenhuma imagem</span>
+           </div>
+           <div className="grid grid-cols-3 gap-3 mb-8">
+              <button type="button" className="flex flex-col items-center justify-center gap-2 bg-brand-surface p-4 rounded-xl border border-white/5 hover:bg-brand-surface/80">
+                 <div className="w-8 h-8 rounded-full bg-[#f9a8d4]/10 flex items-center justify-center text-brand-primary"><Camera size={18} /></div>
+                 <span className="text-[10px] text-brand-muted font-medium">Câmera</span>
+              </button>
+              <button type="button" className="flex flex-col items-center justify-center gap-2 bg-brand-surface p-4 rounded-xl border border-white/5 hover:bg-brand-surface/80">
+                 <div className="w-8 h-8 rounded-full bg-[#f9a8d4]/10 flex items-center justify-center text-brand-primary"><LinkIcon size={18} /></div>
+                 <span className="text-[10px] text-brand-muted font-medium">Link URL</span>
+              </button>
+              <button type="button" className="flex flex-col items-center justify-center gap-2 bg-brand-surface p-4 rounded-xl border border-white/5 hover:bg-brand-surface/80">
+                 <div className="w-8 h-8 rounded-full bg-[#f9a8d4]/10 flex items-center justify-center text-brand-primary"><ImageIcon size={18} /></div>
+                 <span className="text-[10px] text-brand-muted font-medium">Galeria</span>
+              </button>
+           </div>
+           <div className="space-y-5">
+             <div className="bg-[#2a1b2e]/50 p-1 rounded-xl">
+               <Input label="Nome do Produto" name="name" required placeholder="Ex: Kaiak Aero" className="!bg-brand-surface !border-none" />
+             </div>
+             <div className="mb-4">
+                <label className="block text-sm text-brand-muted mb-1.5 ml-1">Marca</label>
+                <div className="relative">
+                  <select name="brand" className="w-full bg-brand-surface text-white rounded-xl py-3.5 px-4 outline-none appearance-none border border-transparent focus:border-brand-primary/50">
+                    <option value="">Selecione...</option>
+                    <option value={Brand.NATURA}>Natura</option>
+                    <option value={Brand.AVON}>Avon</option>
+                    <option value={Brand.OTHER}>Outra</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" size={18} />
+                </div>
+             </div>
+             <div className="mb-4">
+                <label className="block text-sm text-brand-muted mb-1.5 ml-1">Categoria</label>
+                <div className="relative">
+                  <select name="category" className="w-full bg-brand-surface text-white rounded-xl py-3.5 px-4 outline-none appearance-none border border-transparent focus:border-brand-primary/50">
+                    <option value="">Selecione...</option>
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" size={18} />
+                </div>
+             </div>
+             <div className="mb-4">
+               <div className="flex justify-between items-center mb-1.5 ml-1">
+                 <label className="block text-sm text-brand-muted">Descrição</label>
+                 <span className="text-[10px] bg-brand-surface px-2 py-0.5 rounded text-brand-muted">Opcional</span>
+               </div>
+               <textarea rows={4} className="w-full bg-brand-surface border border-transparent focus:border-brand-primary/50 text-white rounded-xl py-3 px-4 outline-none transition-all placeholder-gray-500 resize-none text-sm" placeholder="Adicione detalhes sobre a fragrância, modo de uso ou observações..."></textarea>
+             </div>
+           </div>
+        </form>
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-brand-dark to-transparent">
+          <Button onClick={handleSubmit} className="!rounded-full"><div className="w-5 h-5 rounded-full bg-brand-dark text-brand-primary flex items-center justify-center"><ChevronRight size={14} strokeWidth={4} /></div> Salvar Produto</Button>
+        </div>
+      </div>
+    )
+  }
+
+  // -- Categories Screen --
+  const CategoriesScreen = () => {
+    // Local state moved to App level 'categories' state.
+    const [search, setSearch] = useState('');
+    
+    // Modal State
+    const [modalMode, setModalMode] = useState<'create_category' | 'edit_category' | 'create_sub' | 'edit_sub' | null>(null);
+    const [editingCategory, setEditingCategory] = useState<any>(null);
+    const [editingSub, setEditingSub] = useState<{ parentId: string, index: number, name: string } | null>(null);
+    const [inputValue, setInputValue] = useState('');
+    const [selectedColor, setSelectedColor] = useState(0);
+
+    const toggleExpand = (id: string) => {
+      setCategories(categories.map(c => c.id === id ? { ...c, expanded: !c.expanded } : c));
+    };
+
+    const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+
+    // -- CRUD Operations --
+
+    // Category
+    const openCreateCategory = () => {
+      setModalMode('create_category');
+      setInputValue('');
+      setSelectedColor(0);
+    };
+
+    const openEditCategory = (category: any, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditingCategory(category);
+      setInputValue(category.name);
+      const colorIndex = CATEGORY_COLORS.findIndex(c => c.text === category.color);
+      setSelectedColor(colorIndex >= 0 ? colorIndex : 0);
+      setModalMode('edit_category');
+    };
+
+    const handleDeleteCategory = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      requestDelete(
+        'Excluir Categoria?',
+        'Tem certeza que deseja excluir esta categoria? Todas as subcategorias associadas também serão removidas permanentemente.',
+        () => setCategories(categories.filter(c => c.id !== id))
+      );
+    };
+
+    const saveCategory = () => {
+      if (!inputValue.trim()) return;
+      const colorObj = CATEGORY_COLORS[selectedColor];
+
+      if (modalMode === 'create_category') {
+        const newCat = {
+          id: Date.now().toString(),
+          name: inputValue,
+          icon: SprayCan, // Default icon for now
+          color: colorObj.text,
+          bg: colorObj.bg,
+          expanded: false,
+          subs: []
+        };
+        setCategories([...categories, newCat]);
+      } else if (modalMode === 'edit_category' && editingCategory) {
+        setCategories(categories.map(c => c.id === editingCategory.id ? {
+          ...c,
+          name: inputValue,
+          color: colorObj.text,
+          bg: colorObj.bg
+        } : c));
+      }
+      setModalMode(null);
+    };
+
+    // Subcategory
+    const openCreateSub = (parentId: string) => {
+      setEditingSub({ parentId, index: -1, name: '' });
+      setInputValue('');
+      setModalMode('create_sub');
+    };
+
+    const openEditSub = (parentId: string, index: number, name: string) => {
+      setEditingSub({ parentId, index, name });
+      setInputValue(name);
+      setModalMode('edit_sub');
+    };
+
+    const handleDeleteSub = (parentId: string, index: number, subName: string) => {
+        requestDelete(
+          'Excluir Subcategoria?',
+          `Tem certeza que deseja remover "${subName}"? Esta ação não pode ser desfeita.`,
+          () => {
+            setCategories(prev => prev.map(c => {
+              if (c.id === parentId) {
+                const newSubs = [...c.subs];
+                newSubs.splice(index, 1);
+                return { ...c, subs: newSubs };
+              }
+              return c;
+            }));
+          }
+        );
+    };
+
+    const saveSub = () => {
+      if (!inputValue.trim() || !editingSub) return;
+      
+      setCategories(categories.map(c => {
+        if (c.id === editingSub.parentId) {
+          const newSubs = [...c.subs];
+          if (modalMode === 'create_sub') {
+             newSubs.push(inputValue);
+          } else {
+             newSubs[editingSub.index] = inputValue;
+          }
+          return { ...c, subs: newSubs };
+        }
+        return c;
+      }));
+      setModalMode(null);
+    };
+
+    return (
+      <div className="p-6 h-screen flex flex-col bg-brand-dark">
+         <div className="flex justify-between items-center mb-6">
+           <button onClick={() => setView('stock')} className="text-white hover:text-brand-primary"><ArrowLeft size={24} /></button>
+           <h2 className="text-xl font-bold text-white">Categorias</h2>
+           <div className="w-6"></div>
+         </div>
+         <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" size={18} />
+              <input 
+                type="text" 
+                placeholder="Buscar categoria..." 
+                className="w-full bg-brand-surface text-white pl-10 pr-4 py-3 rounded-xl text-sm outline-none border border-white/5 focus:border-brand-primary/50" 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+         </div>
+         <div className="flex-1 overflow-y-auto space-y-3 pb-20">
+            {filteredCategories.map(cat => (
+              <div key={cat.id} className="bg-brand-surface rounded-2xl overflow-hidden border border-white/5">
+                <div className="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => toggleExpand(cat.id)}>
+                   <div className={`w-12 h-12 rounded-xl ${cat.bg} flex items-center justify-center ${cat.color}`}><cat.icon size={24} /></div>
+                   <div className="flex-1"><h4 className="text-white font-semibold text-sm">{cat.name}</h4><p className="text-xs text-brand-muted">{cat.subs.length} subcategorias</p></div>
+                   
+                   <div className="flex items-center gap-2">
+                     <button onClick={(e) => openEditCategory(cat, e)} className="p-2 hover:bg-white/10 rounded-full text-brand-muted hover:text-white"><Edit2 size={16} /></button>
+                     <button onClick={(e) => handleDeleteCategory(cat.id, e)} className="p-2 hover:bg-white/10 rounded-full text-brand-muted hover:text-red-400"><Trash2 size={16} /></button>
+                     <div className="text-brand-muted ml-1">{cat.expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</div>
+                   </div>
+                </div>
+                {cat.expanded && (
+                   <div className="bg-[#1a121d] px-4 pb-4 pt-1 space-y-1 border-t border-white/5">
+                      {cat.subs.length === 0 && <p className="text-xs text-brand-muted py-2 pl-14 italic">Nenhuma subcategoria.</p>}
+                      {cat.subs.map((sub, idx) => (
+                        <div key={idx} className="flex items-center justify-between py-2 pl-12 pr-2 rounded-lg hover:bg-white/5 transition-colors group">
+                           <span className="text-sm text-gray-300">{sub}</span>
+                           <div className="flex gap-2">
+                              <button onClick={() => openEditSub(cat.id, idx, sub)} className="p-2 text-brand-muted hover:text-white"><Edit2 size={14} /></button>
+                              <button onClick={() => handleDeleteSub(cat.id, idx, sub)} className="p-2 text-brand-muted hover:text-red-400"><Trash2 size={14} /></button>
+                           </div>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => openCreateSub(cat.id)}
+                        className="flex items-center gap-2 pl-12 py-3 text-brand-primary text-xs font-medium hover:text-white transition-colors w-full"
+                      >
+                        <Plus size={14} /> Adicionar Subcategoria
+                      </button>
+                   </div>
+                )}
+              </div>
+            ))}
+         </div>
+         <button onClick={openCreateCategory} className="absolute bottom-6 right-6 w-14 h-14 bg-brand-primary rounded-2xl flex items-center justify-center shadow-lg shadow-brand-primary/30 text-brand-dark hover:scale-105 transition-transform"><Plus size={28} /></button>
+
+         {/* Modal for Categories and Subcategories */}
+         {modalMode && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+             <div className="bg-brand-surface w-full max-w-sm rounded-2xl p-6 border border-white/10 shadow-2xl relative">
+                <button onClick={() => setModalMode(null)} className="absolute right-4 top-4 text-brand-muted hover:text-white"><X size={20} /></button>
+                <h3 className="text-xl font-bold text-white mb-6">
+                  {modalMode === 'create_category' && 'Nova Categoria'}
+                  {modalMode === 'edit_category' && 'Editar Categoria'}
+                  {modalMode === 'create_sub' && 'Nova Subcategoria'}
+                  {modalMode === 'edit_sub' && 'Editar Subcategoria'}
+                </h3>
+                
+                <div className="mb-6">
+                  <label className="text-xs text-brand-muted mb-2 block font-medium uppercase tracking-wider">Nome</label>
+                  <input 
+                    value={inputValue} 
+                    onChange={(e) => setInputValue(e.target.value)} 
+                    className="w-full bg-[#1a121d] border border-transparent focus:border-brand-primary/50 rounded-xl p-4 text-white outline-none" 
+                    placeholder="Digite o nome..." 
+                    autoFocus 
+                  />
+                </div>
+
+                {(modalMode === 'create_category' || modalMode === 'edit_category') && (
+                  <div className="mb-8">
+                     <label className="text-xs text-brand-muted mb-3 block font-medium uppercase tracking-wider">Cor do Ícone</label>
+                     <div className="flex justify-between gap-2">
+                        {CATEGORY_COLORS.map((color, idx) => (
+                           <button 
+                            key={color.name}
+                            onClick={() => setSelectedColor(idx)}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${color.bg} ${selectedColor === idx ? 'ring-2 ring-white scale-110' : 'opacity-70 hover:opacity-100'}`}
+                           >
+                             <div className={`w-4 h-4 rounded-full ${color.text.replace('text-', 'bg-')}`}></div>
+                           </button>
+                        ))}
+                     </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <Button variant="secondary" onClick={() => setModalMode(null)}>Cancelar</Button>
+                  <Button onClick={modalMode.includes('sub') ? saveSub : saveCategory}>Salvar</Button>
+                </div>
+             </div>
+           </div>
+         )}
+      </div>
+    );
+  };
+
+  // -- Sales List Screen --
+  const SalesScreen = () => {
+    return (
+       <div className="p-6 pb-24 h-screen flex flex-col bg-brand-dark">
+         <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Vendas</h2>
+          <Button variant="ghost" className="!w-auto text-brand-primary" onClick={() => setView('new-sale')}><Plus size={20} /> Nova Venda</Button>
+        </div>
+        <div className="flex gap-4 mb-6">
+           <Card className="flex-1 py-3 px-4 bg-brand-surface/50 border border-brand-primary/20">
+             <span className="text-xs text-brand-muted">Total Mês</span>
+             <p className="text-lg font-bold text-white">R$ 1.240,00</p>
+           </Card>
+           <Card className="flex-1 py-3 px-4 bg-brand-surface/50 border border-green-500/20">
+             <span className="text-xs text-brand-muted">A Receber</span>
+             <p className="text-lg font-bold text-green-400">R$ 350,00</p>
+           </Card>
+        </div>
+        <h3 className="text-white font-medium mb-3">Histórico</h3>
+        <div className="space-y-3 overflow-y-auto">
+          {sales.map(sale => (
+            <div key={sale.id} className="bg-brand-surface p-4 rounded-xl flex justify-between items-center border border-white/5">
+               <div>
+                  <h4 className="text-white font-medium">{sale.customerName}</h4>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-brand-muted">{new Date(sale.date).toLocaleDateString('pt-BR')}</span>
+                    <span className="w-1 h-1 bg-brand-muted rounded-full"></span>
+                    <span className="text-xs text-brand-muted">{sale.type === SaleType.ONLINE ? 'Online' : 'Física'}</span>
+                  </div>
+               </div>
+               <div className="text-right">
+                 <span className="block text-brand-primary font-bold">R$ {sale.totalAmount.toFixed(2)}</span>
+                 <span className="text-[10px] text-green-400">Lucro: +R$ {sale.profit.toFixed(2)}</span>
+               </div>
+            </div>
+          ))}
+        </div>
+       </div>
+    );
+  }
+
+  // -- Customers Screen --
+  const CustomersScreen = () => {
+    return (
+      <div className="p-6 pb-24 h-screen flex flex-col bg-brand-dark">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+             <button onClick={() => setView('dashboard')} className="text-white hover:text-brand-primary md:hidden"><ArrowLeft size={24} /></button>
+             <div><h2 className="text-2xl font-bold text-white leading-none">Clientes</h2><p className="text-brand-muted text-xs mt-1">Gerencie seus relacionamentos</p></div>
+           </div>
+           <Button variant="ghost" className="!w-auto text-brand-primary" onClick={() => setView('add-customer')}><Plus size={20} /></Button>
+        </div>
+        <div className="mb-6">
+           <div className="relative">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" size={18} />
+             <input type="text" placeholder="Buscar por nome, telefone..." className="w-full bg-brand-surface text-white pl-10 pr-4 py-3 rounded-xl text-sm outline-none border border-white/5 focus:border-brand-primary/50" />
+           </div>
+        </div>
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {customers.map(customer => (
+            <div key={customer.id} className="bg-brand-surface p-4 rounded-xl flex items-center justify-between border border-white/5">
+               <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-bold text-lg">{customer.name.charAt(0)}</div>
+                 <div>
+                    <h4 className="text-white font-medium text-sm">{customer.name}</h4>
+                    <div className="flex items-center gap-2 mt-1">
+                       {customer.tags.map(tag => (
+                           <span key={tag} className={`text-[9px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wide ${tag === 'Inativo' ? "bg-red-500/10 text-red-500" : tag === 'Novo' ? "bg-blue-500/10 text-blue-500" : "bg-brand-primary/10 text-brand-primary"}`}>{tag}</span>
+                       ))}
+                    </div>
+                 </div>
+               </div>
+               <div className="flex flex-col items-end">
+                  <span className="text-white font-bold text-sm">R$ {customer.totalSpent.toFixed(2)}</span>
+                  <div className="flex items-center gap-1 text-[10px] text-brand-muted mt-0.5"><ShoppingBag size={10} /><span>Última compra: {customer.lastPurchaseDate ? new Date(customer.lastPurchaseDate).toLocaleDateString('pt-BR') : '-'}</span></div>
+               </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderView = () => {
+    switch (view) {
+      case 'login': return <LoginScreen />;
+      case 'dashboard': return <DashboardScreen />;
+      case 'stock': return <StockScreen />;
+      case 'customers': return <CustomersScreen />;
+      case 'add-product': return <AddProductScreen />;
+      case 'categories': return <CategoriesScreen />;
+      case 'sales': return <SalesScreen />;
+      case 'new-sale': return <NewSaleScreen />;
+      case 'settings': return <SettingsScreen />;
+      case 'credit-cards': return <CreditCardsScreen />;
+      case 'manage-brands': return <ManageBrandsScreen />;
+      default: return <DashboardScreen />;
+    }
+  };
+
+  return (
+    <div className="bg-brand-dark min-h-screen text-brand-text font-sans selection:bg-brand-primary selection:text-brand-dark relative">
+      {renderView()}
+      {['dashboard', 'stock', 'customers', 'sales'].includes(view) && <BottomNav currentView={view} setView={setView} />}
+      
+      {/* Global Delete Modal */}
+      <DeleteConfirmationModal 
+        isOpen={deleteConfirmation.isOpen} 
+        onClose={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))} 
+        onConfirm={deleteConfirmation.onConfirm} 
+        title={deleteConfirmation.title} 
+        description={deleteConfirmation.description} 
+      />
+    </div>
+  );
+}
