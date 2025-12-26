@@ -430,8 +430,8 @@ export const DashboardScreen: React.FC = () => {
                 {chartMode === 'count'
                   ? `${metrics.totalCount} vendas`
                   : chartMode === 'profit'
-                  ? formatCurrency(metrics.totalProfit)
-                  : formatCurrency(metrics.totalSales)
+                    ? formatCurrency(metrics.totalProfit)
+                    : formatCurrency(metrics.totalSales)
                 }
               </h3>
               <span className="text-gray-500 text-[10px]">total</span>
@@ -440,25 +440,22 @@ export const DashboardScreen: React.FC = () => {
           <div className="flex bg-[#1a121d] rounded-lg p-0.5 gap-0.5">
             <button
               onClick={() => setChartMode('revenue')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                chartMode === 'revenue' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${chartMode === 'revenue' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+                }`}
             >
               R$
             </button>
             <button
               onClick={() => setChartMode('profit')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                chartMode === 'profit' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${chartMode === 'profit' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+                }`}
             >
               Lucro
             </button>
             <button
               onClick={() => setChartMode('count')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                chartMode === 'count' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${chartMode === 'count' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+                }`}
             >
               Qtd
             </button>
@@ -573,25 +570,22 @@ export const DashboardScreen: React.FC = () => {
           <div className="flex bg-[#1a121d] rounded-lg p-0.5 gap-0.5">
             <button
               onClick={() => setPieChartMode('revenue')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                pieChartMode === 'revenue' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${pieChartMode === 'revenue' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+                }`}
             >
               R$
             </button>
             <button
               onClick={() => setPieChartMode('profit')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                pieChartMode === 'profit' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${pieChartMode === 'profit' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+                }`}
             >
               Lucro
             </button>
             <button
               onClick={() => setPieChartMode('count')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                pieChartMode === 'count' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${pieChartMode === 'count' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+                }`}
             >
               Qtd
             </button>
@@ -603,8 +597,8 @@ export const DashboardScreen: React.FC = () => {
               <PieChart>
                 <Pie
                   data={pieData}
-                  innerRadius={35}
-                  outerRadius={50}
+                  innerRadius={50}
+                  outerRadius={60}
                   paddingAngle={0}
                   dataKey="value"
                   stroke="none"
@@ -617,11 +611,26 @@ export const DashboardScreen: React.FC = () => {
               </PieChart>
             </ResponsiveContainer>
             {/* Center Text */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] text-brand-muted">{getPieChartLabel()}</span>
-              <span className="text-xl font-bold text-white">
-                {pieChartMode === 'count' ? totalOriginValue : formatCurrency(totalOriginValue)}
-              </span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4">
+              <span className="text-[8px] text-brand-muted mb-0.5 uppercase tracking-tighter">{getPieChartLabel()}</span>
+              {(() => {
+                const formatted = pieChartMode === 'count' ? totalOriginValue.toString() : formatCurrency(totalOriginValue);
+                const isCurrency = formatted.includes('R$');
+                const cleanValue = isCurrency ? formatted.replace('R$', '').trim() : formatted;
+                const valueLength = cleanValue.length;
+                const fontSize = valueLength > 10 ? 'text-[13px]' : valueLength > 7 ? 'text-sm' : 'text-base';
+
+                return (
+                  <div className="flex flex-col items-center">
+                    {isCurrency && (
+                      <span className="text-[7px] font-bold text-brand-muted leading-none mb-0.5">R$</span>
+                    )}
+                    <span className={`${fontSize} font-bold text-white leading-none text-center`}>
+                      {cleanValue}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
