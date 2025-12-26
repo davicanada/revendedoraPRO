@@ -17,8 +17,8 @@ import {
    Package
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Product, Sale, SaleType } from '../../types';
-import { generateId, formatCurrency } from '../../utils/calculations';
+import { Product, SaleType } from '../../types';
+import { formatCurrency } from '../../utils/calculations';
 
 interface CartItem {
    product: Product;
@@ -27,7 +27,7 @@ interface CartItem {
 }
 
 export const NewSaleScreen: React.FC = () => {
-   const { products, customers, sales, setView, setSales, setProducts, setCustomers, settings } = useApp();
+   const { products, customers, setView, addSale, updateProduct, updateCustomer, settings } = useApp();
 
    // Cart now stores unitPrice to allow user override
    const [cart, setCart] = useState<CartItem[]>([]);
@@ -133,7 +133,7 @@ export const NewSaleScreen: React.FC = () => {
       }
    }, [subtotal, totalCost, discountValue, saleType, settings.defaultCommission]);
 
-   const handleFinalizeSale = () => {
+   const handleFinalizeSale = async () => {
       if (!selectedCustomerId) {
          alert("Por favor, selecione um cliente.");
          return;
@@ -145,8 +145,7 @@ export const NewSaleScreen: React.FC = () => {
 
       const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
 
-      const newSale: Sale = {
-         id: generateId(),
+      const newSale = {
          customerId: selectedCustomerId,
          customerName: selectedCustomer ? selectedCustomer.name : 'Cliente Desconhecido',
          date: new Date().toISOString(),
@@ -161,32 +160,34 @@ export const NewSaleScreen: React.FC = () => {
          }))
       };
 
-      setSales([newSale, ...sales]);
+      try {
+         // Add sale to database
+         await addSale(newSale);
 
-      if (saleType === SaleType.PHYSICAL) {
-         const updatedProducts = products.map(p => {
-            const cartItem = cart.find(c => c.product.id === p.id);
-            if (cartItem) {
-               return { ...p, stockQuantity: Math.max(0, p.stockQuantity - cartItem.quantity) };
+         // Update product stock if physical sale
+         if (saleType === SaleType.PHYSICAL) {
+            for (const cartItem of cart) {
+               const product = products.find(p => p.id === cartItem.product.id);
+               if (product) {
+                  await updateProduct(cartItem.product.id, {
+                     stockQuantity: Math.max(0, product.stockQuantity - cartItem.quantity)
+                  });
+               }
             }
-            return p;
-         });
-         setProducts(updatedProducts);
-      }
-
-      const updatedCustomers = customers.map(c => {
-         if (c.id === selectedCustomerId) {
-            return {
-               ...c,
-               totalSpent: c.totalSpent + totalSale,
-               lastPurchaseDate: new Date().toISOString()
-            };
          }
-         return c;
-      });
-      setCustomers(updatedCustomers);
 
-      setView('sales');
+         // Update customer
+         if (selectedCustomer) {
+            await updateCustomer(selectedCustomerId, {
+               totalSpent: selectedCustomer.totalSpent + totalSale,
+               lastPurchaseDate: new Date().toISOString()
+            });
+         }
+
+         setView('sales');
+      } catch (err) {
+         console.error('Erro ao finalizar venda:', err);
+      }
    };
 
    return (

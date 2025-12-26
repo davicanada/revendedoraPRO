@@ -9,16 +9,54 @@ export const AddCustomerScreen: React.FC = () => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Função para formatar telefone brasileiro
+  const formatPhoneNumber = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 11 dígitos (DDD + 9 dígitos)
+    const limitedNumbers = numbers.slice(0, 11);
+
+    // Aplica a máscara baseado na quantidade de dígitos
+    if (limitedNumbers.length <= 2) {
+      return limitedNumbers;
+    } else if (limitedNumbers.length <= 6) {
+      // (XX)XXXX
+      return `(${limitedNumbers.slice(0, 2)})${limitedNumbers.slice(2)}`;
+    } else if (limitedNumbers.length <= 10) {
+      // (XX)XXXX-XXXX
+      return `(${limitedNumbers.slice(0, 2)})${limitedNumbers.slice(2, 6)}-${limitedNumbers.slice(6)}`;
+    } else {
+      // (XX)XXXXX-XXXX
+      return `(${limitedNumbers.slice(0, 2)})${limitedNumbers.slice(2, 7)}-${limitedNumbers.slice(7, 11)}`;
+    }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setPhone(formatted);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name.trim()) {
-      alert('Nome é obrigatório');
+    // Validar nome completo (pelo menos nome e sobrenome)
+    const nameParts = name.trim().split(' ').filter(part => part.length > 0);
+    if (nameParts.length < 2) {
+      alert('Por favor, digite o nome completo (nome e sobrenome)');
       return;
     }
 
-    const newCustomer: Customer = {
-      id: Date.now().toString(),
+    // Validar telefone se foi preenchido
+    if (phone.trim()) {
+      const phoneNumbers = phone.replace(/\D/g, '');
+      if (phoneNumbers.length < 10 || phoneNumbers.length > 11) {
+        alert('Telefone inválido. Use o formato (XX)XXXX-XXXX ou (XX)XXXXX-XXXX');
+        return;
+      }
+    }
+
+    const newCustomer = {
       name: name.trim(),
       phone: phone.trim() || undefined,
       email: undefined,
@@ -29,8 +67,12 @@ export const AddCustomerScreen: React.FC = () => {
       birthDate: undefined
     };
 
-    addCustomer(newCustomer);
-    setView('customers');
+    try {
+      await addCustomer(newCustomer);
+      setView('customers');
+    } catch (err) {
+      console.error('Erro ao adicionar cliente:', err);
+    }
   };
 
   return (
@@ -62,7 +104,7 @@ export const AddCustomerScreen: React.FC = () => {
             icon={Phone}
             type="tel"
             value={phone}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPhone(e.target.value)}
+            onChange={handlePhoneChange}
             placeholder="(11) 98765-4321"
           />
         </div>

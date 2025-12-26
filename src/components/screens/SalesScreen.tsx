@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Plus, ShoppingBag } from 'lucide-react';
+import { Plus, ShoppingBag, DollarSign, TrendingUp, Percent, Hash } from 'lucide-react';
 import { Button, Card } from '../common';
 import { useApp } from '../../context/AppContext';
 import { SaleType } from '../../types';
@@ -8,8 +8,8 @@ import { formatCurrency } from '../../utils/calculations';
 export const SalesScreen: React.FC = () => {
   const { sales, setView } = useApp();
 
-  // Calculate monthly totals from real sales data
-  const { totalMonth, toReceive } = useMemo(() => {
+  // Calculate monthly metrics from real sales data
+  const monthlyMetrics = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -19,10 +19,12 @@ export const SalesScreen: React.FC = () => {
       return saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear;
     });
 
-    const totalMonth = salesThisMonth.reduce((acc, s) => acc + s.totalAmount, 0);
-    const toReceive = salesThisMonth.reduce((acc, s) => acc + s.profit, 0);
+    const revenue = salesThisMonth.reduce((acc, s) => acc + s.totalAmount, 0);
+    const profit = salesThisMonth.reduce((acc, s) => acc + s.profit, 0);
+    const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    const salesCount = salesThisMonth.length;
 
-    return { totalMonth, toReceive };
+    return { revenue, profit, profitMargin, salesCount };
   }, [sales]);
 
   return (
@@ -45,13 +47,44 @@ export const SalesScreen: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto px-6 pt-6">
         <div className="grid grid-cols-2 gap-3 mb-6">
-          <Card className="!p-3">
-            <p className="text-brand-muted text-xs mb-1">Total do Mês</p>
-            <p className="text-white font-bold text-lg">{formatCurrency(totalMonth)}</p>
+          <Card className="!p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                <DollarSign size={16} className="text-green-400" />
+              </div>
+              <p className="text-brand-muted text-[10px] font-medium">Faturamento do Mês</p>
+            </div>
+            <p className="text-white font-bold text-xl">{formatCurrency(monthlyMetrics.revenue)}</p>
           </Card>
-          <Card className="!p-3">
-            <p className="text-brand-muted text-xs mb-1">Lucro do Mês</p>
-            <p className="text-brand-primary font-bold text-lg">{formatCurrency(toReceive)}</p>
+
+          <Card className="!p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-brand-primary/10 flex items-center justify-center">
+                <TrendingUp size={16} className="text-brand-primary" />
+              </div>
+              <p className="text-brand-muted text-[10px] font-medium">Lucro do Mês</p>
+            </div>
+            <p className="text-brand-primary font-bold text-xl">{formatCurrency(monthlyMetrics.profit)}</p>
+          </Card>
+
+          <Card className="!p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <Percent size={16} className="text-purple-400" />
+              </div>
+              <p className="text-brand-muted text-[10px] font-medium">Margem de Lucro</p>
+            </div>
+            <p className="text-white font-bold text-xl">{monthlyMetrics.profitMargin.toFixed(1)}%</p>
+          </Card>
+
+          <Card className="!p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Hash size={16} className="text-blue-400" />
+              </div>
+              <p className="text-brand-muted text-[10px] font-medium">Vendas Realizadas</p>
+            </div>
+            <p className="text-white font-bold text-xl">{monthlyMetrics.salesCount}</p>
           </Card>
         </div>
 

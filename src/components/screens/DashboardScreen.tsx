@@ -25,20 +25,37 @@ export const DashboardScreen: React.FC = () => {
 
   // Cálculos dinâmicos baseados no estado atual
   const metrics = useMemo(() => {
-    // 1. Estoque Atual
-    const currentStock = products.reduce((acc, p) => acc + (p.stockQuantity * p.costPrice), 0);
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
-    // 2. Vendas Totais
+    // Calcular mês anterior
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    // Filtrar vendas do mês atual
+    const currentMonthSales = sales.filter(s => {
+      const saleDate = new Date(s.date);
+      return saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear;
+    });
+
+    // Filtrar vendas do mês anterior
+    const lastMonthSales = sales.filter(s => {
+      const saleDate = new Date(s.date);
+      return saleDate.getMonth() === lastMonth && saleDate.getFullYear() === lastMonthYear;
+    });
+
+    // 1. Lucro do mês atual
+    const monthlyProfit = currentMonthSales.reduce((acc, s) => acc + s.profit, 0);
+
+    // 2. Lucro do mês anterior
+    const lastMonthProfit = lastMonthSales.reduce((acc, s) => acc + s.profit, 0);
+
+    // 3. Vendas Totais (de todos os tempos)
     const totalSales = sales.reduce((acc, s) => acc + s.totalAmount, 0);
 
-    // 3. Lucro Acumulado
-    const accumulatedProfit = sales.reduce((acc, s) => acc + s.profit, 0);
-    const monthlyProfit = accumulatedProfit;
-
-    // 4. Comissões Digital
-    const digitalCommissions = sales
-      .filter(s => s.type === SaleType.ONLINE)
-      .reduce((acc, s) => acc + s.profit, 0);
+    // 4. Total Investido (custo do estoque atual)
+    const totalInvested = products.reduce((acc, p) => acc + (p.stockQuantity * p.costPrice), 0);
 
     // 5. Sales by Origin
     const physicalSales = sales.filter(s => s.type === SaleType.PHYSICAL);
@@ -66,11 +83,11 @@ export const DashboardScreen: React.FC = () => {
 
     return {
       totalSales,
-      currentStock,
-      digitalCommissions,
-      accumulatedProfit,
+      physicalTotal,
+      onlineTotal,
+      totalInvested,
       monthlyProfit,
-      lastMonthProfit: 50.00,
+      lastMonthProfit,
       salesByOrigin,
       totalCount
     };
@@ -185,26 +202,26 @@ export const DashboardScreen: React.FC = () => {
             <p className="text-white font-bold text-lg">{formatCurrency(metrics.totalSales)}</p>
           </div>
           <div className="bg-brand-surface p-4 rounded-2xl border border-white/5">
-            <div className="w-9 h-9 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 mb-3">
+            <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center text-green-400 mb-3">
               <Package size={18} />
             </div>
-            <p className="text-brand-muted text-[10px] mb-1 font-medium">Estoque Atual</p>
-            <p className="text-white font-bold text-lg">{formatCurrency(metrics.currentStock)}</p>
+            <p className="text-brand-muted text-[10px] mb-1 font-medium">Vendas Físicas</p>
+            <p className="text-white font-bold text-lg">{formatCurrency(metrics.physicalTotal)}</p>
           </div>
           <div className="bg-brand-surface p-4 rounded-2xl border border-white/5">
-            <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 mb-3">
+            <div className="w-9 h-9 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400 mb-3">
               <Smartphone size={18} />
             </div>
-            <p className="text-brand-muted text-[10px] mb-1 font-medium">Comissões Digital</p>
-            <p className="text-white font-bold text-lg">{formatCurrency(metrics.digitalCommissions)}</p>
+            <p className="text-brand-muted text-[10px] mb-1 font-medium">Vendas Online</p>
+            <p className="text-white font-bold text-lg">{formatCurrency(metrics.onlineTotal)}</p>
           </div>
           <div className="bg-brand-surface p-4 rounded-2xl border border-white/5 relative overflow-hidden">
-            <div className="w-9 h-9 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400 mb-3 relative z-10">
+            <div className="w-9 h-9 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 mb-3 relative z-10">
               <PiggyBank size={18} />
             </div>
-            <p className="text-brand-muted text-[10px] mb-1 font-medium relative z-10">Lucro Acumulado</p>
-            <p className="text-white font-bold text-lg relative z-10">{formatCurrency(metrics.accumulatedProfit)}</p>
-            <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-purple-500/10 rounded-full blur-xl"></div>
+            <p className="text-brand-muted text-[10px] mb-1 font-medium relative z-10">Total Investido</p>
+            <p className="text-white font-bold text-lg relative z-10">{formatCurrency(metrics.totalInvested)}</p>
+            <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-orange-500/10 rounded-full blur-xl"></div>
           </div>
         </div>
       </div>
