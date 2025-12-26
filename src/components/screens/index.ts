@@ -10,3 +10,4 @@ export { ManageBrandsScreen } from './ManageBrandsScreen';
 export { CategoriesScreen } from './CategoriesScreen';
 export { AddProductScreen } from './AddProductScreen';
 export { AddCustomerScreen } from './AddCustomerScreen';
+export { EditProductScreen } from './EditProductScreen';

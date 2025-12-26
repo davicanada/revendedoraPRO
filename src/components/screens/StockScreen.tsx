@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Search, Filter, MoreHorizontal, Plus, Trash2, Package } from 'lucide-react';
+import { ArrowLeft, Search, Filter, MoreHorizontal, Plus, Trash2, Package, Edit2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Brand } from '../../types';
+import { Brand, Product } from '../../types';
+import { EditProductScreen } from './EditProductScreen';
 
 export const StockScreen: React.FC = () => {
-  const { products, setView, setProducts } = useApp();
+  const { products, setView, deleteProduct } = useApp();
   const [filter, setFilter] = useState('');
   const [brandFilter, setBrandFilter] = useState<'Todas' | Brand | 'Baixo Estoque'>('Todas');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const totalInvested = products.reduce((acc, p) => acc + (p.costPrice * p.stockQuantity), 0);
 
@@ -17,12 +19,31 @@ export const StockScreen: React.FC = () => {
     return matchesSearch && p.brand === brandFilter;
   });
 
-  const handleDeleteProduct = (e: React.MouseEvent, id: string, name: string) => {
+  const handleDeleteProduct = async (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation();
     if (window.confirm(`Tem certeza que deseja excluir "${name}"? Esta ação não poderá ser desfeita.`)) {
-      setProducts(products.filter(p => p.id !== id));
+      try {
+        await deleteProduct(id);
+      } catch (err) {
+        console.error('Erro ao deletar produto:', err);
+      }
     }
   };
+
+  const handleEditProduct = (e: React.MouseEvent, product: Product) => {
+    e.stopPropagation();
+    setEditingProduct(product);
+  };
+
+  // Se está editando um produto, mostra a tela de edição
+  if (editingProduct) {
+    return (
+      <EditProductScreen
+        product={editingProduct}
+        onClose={() => setEditingProduct(null)}
+      />
+    );
+  }
 
   const getStatusBadge = (stock: number): JSX.Element | null => {
     if (stock === 0) return <span className="bg-red-500/10 text-red-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider border border-red-500/20">Esgotado</span>;
@@ -61,9 +82,15 @@ export const StockScreen: React.FC = () => {
       </div>
       <div className="flex-1 overflow-y-auto space-y-3">
         {filteredProducts.map(product => (
-          <div key={product.id} className="bg-brand-surface p-3 rounded-2xl flex gap-3 items-center border border-white/5 relative overflow-hidden group">
+          <div
+            key={product.id}
+            onClick={(e) => handleEditProduct(e, product)}
+            className="bg-brand-surface p-3 rounded-2xl flex gap-3 items-center border border-white/5 relative overflow-hidden group hover:border-brand-primary/30 transition-all cursor-pointer"
+          >
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${product.brand === Brand.NATURA ? 'bg-orange-500' : 'bg-pink-500'}`}></div>
-            <div className="w-16 h-16 rounded-lg bg-gray-800 flex-shrink-0 overflow-hidden ml-2"><img src={product.image} alt={product.name} className="w-full h-full object-cover" /></div>
+            <div className="w-16 h-16 rounded-lg bg-gray-800 flex-shrink-0 overflow-hidden ml-2">
+              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+            </div>
             <div className="flex-1 min-w-0 py-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`text-[9px] font-bold uppercase ${product.brand === Brand.NATURA ? 'text-orange-400' : 'text-pink-400'}`}>{product.brand}</span>
@@ -82,9 +109,22 @@ export const StockScreen: React.FC = () => {
                     <span className="text-[9px] text-brand-muted">unid.</span>
                   </div>
                </div>
-               <button onClick={(e) => handleDeleteProduct(e, product.id, product.name)} className="p-1.5 bg-white/5 rounded-full text-brand-muted hover:text-red-400 hover:bg-white/10 transition-colors">
-                  <Trash2 size={14} />
-               </button>
+               <div className="flex gap-1">
+                 <button
+                   onClick={(e) => handleEditProduct(e, product)}
+                   className="p-1.5 bg-white/5 rounded-full text-brand-muted hover:text-brand-primary hover:bg-white/10 transition-colors"
+                   title="Editar produto"
+                 >
+                    <Edit2 size={14} />
+                 </button>
+                 <button
+                   onClick={(e) => handleDeleteProduct(e, product.id, product.name)}
+                   className="p-1.5 bg-white/5 rounded-full text-brand-muted hover:text-red-400 hover:bg-white/10 transition-colors"
+                   title="Excluir produto"
+                 >
+                    <Trash2 size={14} />
+                 </button>
+               </div>
             </div>
           </div>
         ))}

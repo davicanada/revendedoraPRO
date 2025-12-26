@@ -1,36 +1,34 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Camera, Link as LinkIcon, Image as ImageIcon, Search, Package } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronDown, ChevronRight, Camera, Link as LinkIcon, Image as ImageIcon, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Brand, Product } from '../../types';
 import { Input, Button } from '../common';
 
-export const AddProductScreen: React.FC = () => {
-  const { categories, products, setView, addProduct, updateProduct } = useApp();
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedSubcategory, setSelectedSubcategory] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedExistingProduct, setSelectedExistingProduct] = useState<Product | null>(null);
-  const [imageUrl, setImageUrl] = useState('');
+interface EditProductScreenProps {
+  product: Product;
+  onClose?: () => void;
+}
+
+export const EditProductScreen: React.FC<EditProductScreenProps> = ({ product, onClose }) => {
+  const { categories, updateProduct, deleteProduct } = useApp();
+  const [selectedCategory, setSelectedCategory] = useState(product.category.split(' - ')[0] || product.category);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(product.category.split(' - ')[1] || '');
+  const [imageUrl, setImageUrl] = useState(product.image || '');
+  const [showImageInput, setShowImageInput] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState('');
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
 
-  // Buscar produtos existentes
-  const filteredProducts = useMemo(() => {
-    if (!searchTerm.trim()) return [];
-    return products.filter(p =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.brand.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(0, 5);
-  }, [searchTerm, products]);
-
   const selectedCategoryData = categories.find(c => c.name === selectedCategory);
   const subcategories = selectedCategoryData?.subcategories || [];
 
-  const handleSelectExistingProduct = (product: Product) => {
-    setSelectedExistingProduct(product);
-    setSearchTerm(product.name);
-    setSelectedCategory(product.category.split(' - ')[0] || product.category);
+  const handleImageChange = () => {
+    if (tempImageUrl.trim()) {
+      setImageUrl(tempImageUrl);
+      setShowImageInput(false);
+      setTempImageUrl('');
+    }
   };
 
   // Converter arquivo para base64
@@ -75,6 +73,7 @@ export const AddProductScreen: React.FC = () => {
       streamRef.current = stream;
       setShowCamera(true);
 
+      // Aguardar o vídeo estar pronto
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -131,121 +130,98 @@ export const AddProductScreen: React.FC = () => {
     const subcategory = formData.get('subcategory') as string;
     const quantity = Number(formData.get('quantity'));
     const costPrice = Number(formData.get('costPrice'));
+    const salePrice = Number(formData.get('salePrice'));
 
-    if (!name || !brand || !category || quantity <= 0 || costPrice <= 0) {
-      alert('Preencha todos os campos obrigatórios corretamente');
+    if (!name || !brand || !category) {
+      alert('Preencha todos os campos obrigatórios');
       return;
     }
 
     const fullCategory = subcategory ? `${category} - ${subcategory}` : category;
 
-    try {
-      if (selectedExistingProduct) {
-        // Produto já existe: adicionar quantidade e recalcular custo médio
-        const newQuantity = selectedExistingProduct.stockQuantity + quantity;
-        const totalOldCost = selectedExistingProduct.costPrice * selectedExistingProduct.stockQuantity;
-        const totalNewCost = costPrice * quantity;
-        const averageCost = (totalOldCost + totalNewCost) / newQuantity;
+    const updates = {
+      name,
+      brand,
+      category: fullCategory,
+      stockQuantity: quantity,
+      costPrice,
+      salePrice,
+      image: imageUrl
+    };
 
-        await updateProduct(selectedExistingProduct.id, {
-          stockQuantity: newQuantity,
-          costPrice: averageCost
-        });
-        alert(`Estoque atualizado! Nova quantidade: ${newQuantity}. Custo médio: R$ ${averageCost.toFixed(2)}`);
-      } else {
-        // Produto novo: criar
-        const newProduct = {
-          name,
-          brand,
-          category: fullCategory,
-          stockQuantity: quantity,
-          costPrice,
-          salePrice: costPrice * 1.15, // Preço sugerido com 15% de lucro sobre o custo
-          image: imageUrl || 'https://via.placeholder.com/100/2A4535/f9a8d4?text=' + name.charAt(0).toUpperCase()
-        };
-        await addProduct(newProduct);
-      }
-      setView('stock');
+    try {
+      await updateProduct(product.id, updates);
+      if (onClose) onClose();
     } catch (err) {
-      console.error('Erro ao processar produto:', err);
+      console.error('Erro ao atualizar produto:', err);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm(`Tem certeza que deseja excluir "${product.name}"? Esta ação não poderá ser desfeita.`)) {
+      try {
+        await deleteProduct(product.id);
+        if (onClose) onClose();
+      } catch (err) {
+        console.error('Erro ao deletar produto:', err);
+      }
     }
   };
 
   return (
     <div className="h-screen flex flex-col bg-brand-dark relative">
       <div className="flex items-center justify-between p-6">
-        <button onClick={() => setView('stock')} className="text-brand-muted text-sm font-medium hover:text-white">Cancelar</button>
-        <h2 className="text-lg font-bold text-white">Entrada de Estoque</h2>
-        <div className="w-16"></div>
+        <button onClick={onClose} className="text-brand-muted text-sm font-medium hover:text-white">Cancelar</button>
+        <h2 className="text-lg font-bold text-white">Editar Produto</h2>
+        <button onClick={handleDelete} className="text-red-400 text-sm font-medium hover:text-red-300">Excluir</button>
       </div>
+
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 pb-24">
-         {/* Busca de Produtos Existentes */}
+         {/* Imagem do Produto */}
          <div className="mb-6">
-           <label className="block text-sm text-brand-muted mb-2 ml-1">Buscar Produto Existente</label>
-           <div className="relative">
-             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" size={20} />
-             <input
-               type="text"
-               value={searchTerm}
-               onChange={(e) => {
-                 setSearchTerm(e.target.value);
-                 if (selectedExistingProduct) setSelectedExistingProduct(null);
-               }}
-               placeholder="Digite o nome do produto..."
-               className="w-full bg-brand-surface text-white rounded-xl py-3.5 pl-11 pr-4 outline-none border border-transparent focus:border-brand-primary/50"
-             />
+           <div className="w-full h-40 bg-brand-surface/30 border-2 border-dashed border-brand-primary/20 rounded-2xl flex flex-col items-center justify-center mb-3 overflow-hidden">
+             {imageUrl ? (
+               <img src={imageUrl} alt={product.name} className="w-full h-full object-cover" />
+             ) : (
+               <>
+                 <div className="w-12 h-12 bg-brand-surface rounded-full flex items-center justify-center text-brand-muted mb-2">
+                   <ImageIcon size={24} />
+                 </div>
+                 <span className="text-xs text-brand-muted">Nenhuma imagem</span>
+               </>
+             )}
            </div>
 
-           {/* Lista de produtos encontrados */}
-           {filteredProducts.length > 0 && !selectedExistingProduct && (
-             <div className="mt-2 bg-brand-surface rounded-xl border border-white/5 overflow-hidden">
-               {filteredProducts.map((product) => (
+           {showImageInput ? (
+             <div className="space-y-2">
+               <div className="flex gap-2">
+                 <input
+                   type="text"
+                   value={tempImageUrl}
+                   onChange={(e) => setTempImageUrl(e.target.value)}
+                   placeholder="Cole a URL da imagem..."
+                   className="flex-1 bg-brand-surface text-white rounded-xl py-2.5 px-4 text-sm outline-none border border-transparent focus:border-brand-primary/50"
+                 />
                  <button
-                   key={product.id}
                    type="button"
-                   onClick={() => handleSelectExistingProduct(product)}
-                   className="w-full flex items-center gap-3 p-3 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-b-0"
+                   onClick={handleImageChange}
+                   className="px-4 py-2.5 bg-brand-primary text-brand-dark rounded-xl text-sm font-semibold hover:brightness-105"
                  >
-                   <div className="w-10 h-10 rounded-lg bg-brand-primary/10 flex items-center justify-center">
-                     <Package size={20} className="text-brand-primary" />
-                   </div>
-                   <div className="flex-1 min-w-0">
-                     <p className="text-white text-sm font-medium truncate">{product.name}</p>
-                     <p className="text-brand-muted text-xs">{product.brand} • Estoque: {product.stockQuantity}</p>
-                   </div>
-                   <ChevronRight size={16} className="text-brand-muted" />
+                   Aplicar
                  </button>
-               ))}
+                 <button
+                   type="button"
+                   onClick={() => {
+                     setShowImageInput(false);
+                     setTempImageUrl('');
+                   }}
+                   className="px-3 py-2.5 bg-brand-surface text-brand-muted rounded-xl hover:text-white"
+                 >
+                   <X size={18} />
+                 </button>
+               </div>
              </div>
-           )}
-
-           {selectedExistingProduct && (
-             <div className="mt-2 bg-green-500/10 border border-green-500/20 rounded-xl p-3">
-               <p className="text-green-400 text-xs font-medium mb-1">✓ Produto encontrado</p>
-               <p className="text-white text-sm">{selectedExistingProduct.name}</p>
-               <p className="text-brand-muted text-xs">Estoque atual: {selectedExistingProduct.stockQuantity} • Custo médio: R$ {selectedExistingProduct.costPrice.toFixed(2)}</p>
-             </div>
-           )}
-         </div>
-
-         <div className="h-px bg-white/10 mb-6"></div>
-
-         {/* Imagem do Produto */}
-         {!selectedExistingProduct && (
-           <div className="mb-6">
-             <div className="w-full h-40 bg-brand-surface/30 border-2 border-dashed border-brand-primary/20 rounded-2xl flex flex-col items-center justify-center mb-3 overflow-hidden">
-               {imageUrl ? (
-                 <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
-               ) : (
-                 <>
-                   <div className="w-12 h-12 bg-brand-surface rounded-full flex items-center justify-center text-brand-muted mb-2">
-                     <ImageIcon size={24} />
-                   </div>
-                   <span className="text-xs text-brand-muted">Adicione uma imagem do produto</span>
-                 </>
-               )}
-             </div>
-
+           ) : (
              <div className="grid grid-cols-3 gap-3">
                <button
                  type="button"
@@ -271,10 +247,7 @@ export const AddProductScreen: React.FC = () => {
                </label>
                <button
                  type="button"
-                 onClick={() => {
-                   const url = prompt('Cole a URL da imagem:');
-                   if (url) setImageUrl(url);
-                 }}
+                 onClick={() => setShowImageInput(true)}
                  className="flex flex-col items-center justify-center gap-2 bg-brand-surface p-4 rounded-xl border border-white/5 hover:bg-brand-surface/80 transition-colors"
                >
                  <div className="w-8 h-8 rounded-full bg-[#f9a8d4]/10 flex items-center justify-center text-brand-primary">
@@ -283,8 +256,8 @@ export const AddProductScreen: React.FC = () => {
                  <span className="text-[10px] text-brand-muted font-medium">URL</span>
                </button>
              </div>
-           </div>
-         )}
+           )}
+         </div>
 
          {/* Modal da Câmera */}
          {showCamera && (
@@ -321,6 +294,9 @@ export const AddProductScreen: React.FC = () => {
            </div>
          )}
 
+
+         <div className="h-px bg-white/10 mb-6"></div>
+
          <div className="space-y-5">
            <div className="bg-[#2a1b2e]/50 p-1 rounded-xl">
              <Input
@@ -328,21 +304,19 @@ export const AddProductScreen: React.FC = () => {
                name="name"
                required
                placeholder="Ex: Kaiak Aero"
-               value={selectedExistingProduct?.name || searchTerm}
-               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+               defaultValue={product.name}
                className="!bg-brand-surface !border-none"
-               disabled={!!selectedExistingProduct}
              />
            </div>
+
            <div className="mb-4">
               <label className="block text-sm text-brand-muted mb-1.5 ml-1">Marca*</label>
               <div className="relative">
                 <select
                   name="brand"
                   required
-                  defaultValue={selectedExistingProduct?.brand || ''}
-                  disabled={!!selectedExistingProduct}
-                  className="w-full bg-brand-surface text-white rounded-xl py-3.5 px-4 outline-none appearance-none border border-transparent focus:border-brand-primary/50 disabled:opacity-60"
+                  defaultValue={product.brand}
+                  className="w-full bg-brand-surface text-white rounded-xl py-3.5 px-4 outline-none appearance-none border border-transparent focus:border-brand-primary/50"
                 >
                   <option value="">Selecione...</option>
                   <option value={Brand.NATURA}>Natura</option>
@@ -352,6 +326,7 @@ export const AddProductScreen: React.FC = () => {
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" size={18} />
               </div>
            </div>
+
            <div className="mb-4">
               <label className="block text-sm text-brand-muted mb-1.5 ml-1">Categoria*</label>
               <div className="relative">
@@ -401,33 +376,44 @@ export const AddProductScreen: React.FC = () => {
                    step="0.01"
                    min="0.01"
                    required
+                   defaultValue={product.costPrice}
                    placeholder="0,00"
                    className="w-full bg-brand-surface text-white rounded-xl py-3.5 pl-10 pr-4 outline-none border border-transparent focus:border-brand-primary/50"
                  />
                </div>
-               <p className="text-[10px] text-brand-muted mt-1 ml-1">Quanto você pagou por unidade</p>
+               <p className="text-[10px] text-brand-muted mt-1 ml-1">Custo médio do produto</p>
              </div>
              <div>
-               <label className="block text-sm text-brand-muted mb-1.5 ml-1">Quantidade a Adicionar*</label>
-               <input
-                 type="number"
-                 name="quantity"
-                 min="1"
-                 defaultValue="1"
-                 required
-                 placeholder="0"
-                 className="w-full bg-brand-surface text-white rounded-xl py-3.5 px-4 outline-none border border-transparent focus:border-brand-primary/50"
-               />
-               <p className="text-[10px] text-brand-muted mt-1 ml-1">Unidades para entrada no estoque</p>
+               <label className="block text-sm text-brand-muted mb-1.5 ml-1">Preço de Venda*</label>
+               <div className="relative">
+                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted">R$</span>
+                 <input
+                   type="number"
+                   name="salePrice"
+                   step="0.01"
+                   min="0.01"
+                   required
+                   defaultValue={product.salePrice}
+                   placeholder="0,00"
+                   className="w-full bg-brand-surface text-white rounded-xl py-3.5 pl-10 pr-4 outline-none border border-transparent focus:border-brand-primary/50"
+                 />
+               </div>
+               <p className="text-[10px] text-brand-muted mt-1 ml-1">Preço sugerido para venda</p>
              </div>
            </div>
 
            <div className="mb-24">
-             <div className="flex justify-between items-center mb-1.5 ml-1">
-               <label className="block text-sm text-brand-muted">Descrição</label>
-               <span className="text-[10px] bg-brand-surface px-2 py-0.5 rounded text-brand-muted">Opcional</span>
-             </div>
-             <textarea rows={4} className="w-full bg-brand-surface border border-transparent focus:border-brand-primary/50 text-white rounded-xl py-3 px-4 outline-none transition-all placeholder-gray-500 resize-none text-sm" placeholder="Adicione detalhes sobre a fragrância, modo de uso ou observações..."></textarea>
+             <label className="block text-sm text-brand-muted mb-1.5 ml-1">Quantidade em Estoque*</label>
+             <input
+               type="number"
+               name="quantity"
+               min="0"
+               defaultValue={product.stockQuantity}
+               required
+               placeholder="0"
+               className="w-full bg-brand-surface text-white rounded-xl py-3.5 px-4 outline-none border border-transparent focus:border-brand-primary/50"
+             />
+             <p className="text-[10px] text-brand-muted mt-1 ml-1">Quantidade atual em estoque</p>
            </div>
 
            <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-brand-dark to-transparent">
@@ -435,7 +421,7 @@ export const AddProductScreen: React.FC = () => {
                <div className="w-5 h-5 rounded-full bg-brand-dark text-brand-primary flex items-center justify-center">
                  <ChevronRight size={14} strokeWidth={4} />
                </div>
-               {selectedExistingProduct ? 'Adicionar ao Estoque' : 'Cadastrar Produto'}
+               Salvar Alterações
              </Button>
            </div>
          </div>
