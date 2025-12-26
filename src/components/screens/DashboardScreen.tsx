@@ -18,6 +18,7 @@ import { formatCurrency } from '../../utils/calculations';
 export const DashboardScreen: React.FC = () => {
   const { products, sales, setView, user } = useApp();
   const [chartMode, setChartMode] = React.useState<'revenue' | 'profit' | 'count'>('revenue');
+  const [pieChartMode, setPieChartMode] = React.useState<'revenue' | 'profit' | 'count'>('revenue');
 
   // Extract user profile data from Supabase user metadata
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
@@ -84,13 +85,15 @@ export const DashboardScreen: React.FC = () => {
     const salesByOrigin = [
       {
         name: 'Físico (Presencial)',
-        value: physicalTotal,
+        revenue: physicalTotal,
+        profit: physicalProfit,
         count: physicalSales.length,
         color: '#f9a8d4'
       },
       {
         name: 'Online (Digital)',
-        value: onlineTotal,
+        revenue: onlineTotal,
+        profit: onlineProfit,
         count: onlineSales.length,
         color: '#6d4c7d'
       }
@@ -160,6 +163,19 @@ export const DashboardScreen: React.FC = () => {
     return 'Quantidade';
   };
 
+  const getPieChartData = () => {
+    return metrics.salesByOrigin.map(item => ({
+      ...item,
+      value: pieChartMode === 'revenue' ? item.revenue : pieChartMode === 'profit' ? item.profit : item.count
+    }));
+  };
+
+  const getPieChartLabel = () => {
+    if (pieChartMode === 'revenue') return 'Faturamento';
+    if (pieChartMode === 'profit') return 'Lucro';
+    return 'Vendas';
+  };
+
   const profitGrowth = metrics.lastMonthProfit > 0
     ? ((metrics.monthlyProfit - metrics.lastMonthProfit) / metrics.lastMonthProfit) * 100
     : metrics.monthlyProfit > 0 ? 100 : 0;
@@ -217,8 +233,9 @@ export const DashboardScreen: React.FC = () => {
       .slice(0, 5);
   }, [sales]);
 
-  // Calculate Percentages for Pie Chart Legend (based on Value $)
-  const totalOriginValue = metrics.salesByOrigin.reduce((acc, curr) => acc + curr.value, 0);
+  // Calculate Percentages for Pie Chart Legend (based on selected mode)
+  const pieData = getPieChartData();
+  const totalOriginValue = pieData.reduce((acc, curr) => acc + curr.value, 0);
   const getPercent = (value: number) => totalOriginValue > 0 ? Math.round((value / totalOriginValue) * 100) : 0;
 
   return (
@@ -543,13 +560,49 @@ export const DashboardScreen: React.FC = () => {
 
       {/* Sales Origin Pie Chart */}
       <Card className="p-5">
-        <h3 className="text-brand-muted text-xs mb-4">Origem das Vendas</h3>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="text-brand-muted text-xs mb-1">Origem das Vendas</h3>
+            <p className="text-white font-bold text-lg">
+              {pieChartMode === 'count'
+                ? `${totalOriginValue} vendas`
+                : formatCurrency(totalOriginValue)
+              }
+            </p>
+          </div>
+          <div className="flex bg-[#1a121d] rounded-lg p-0.5 gap-0.5">
+            <button
+              onClick={() => setPieChartMode('revenue')}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                pieChartMode === 'revenue' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+              }`}
+            >
+              R$
+            </button>
+            <button
+              onClick={() => setPieChartMode('profit')}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                pieChartMode === 'profit' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+              }`}
+            >
+              Lucro
+            </button>
+            <button
+              onClick={() => setPieChartMode('count')}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                pieChartMode === 'count' ? 'bg-[#332636] text-white shadow-sm' : 'text-brand-muted hover:text-white'
+              }`}
+            >
+              Qtd
+            </button>
+          </div>
+        </div>
         <div className="flex items-center gap-6">
           <div className="relative w-32 h-32 flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={metrics.salesByOrigin}
+                  data={pieData}
                   innerRadius={35}
                   outerRadius={50}
                   paddingAngle={0}
@@ -557,7 +610,7 @@ export const DashboardScreen: React.FC = () => {
                   stroke="none"
                   isAnimationActive={false}
                 >
-                  {metrics.salesByOrigin.map((entry, index) => (
+                  {pieData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                   ))}
                 </Pie>
@@ -565,14 +618,16 @@ export const DashboardScreen: React.FC = () => {
             </ResponsiveContainer>
             {/* Center Text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] text-brand-muted">Vendas</span>
-              <span className="text-xl font-bold text-white">{metrics.totalCount}</span>
+              <span className="text-[10px] text-brand-muted">{getPieChartLabel()}</span>
+              <span className="text-xl font-bold text-white">
+                {pieChartMode === 'count' ? totalOriginValue : formatCurrency(totalOriginValue)}
+              </span>
             </div>
           </div>
 
           {/* Legend */}
           <div className="flex-1 space-y-4">
-            {metrics.salesByOrigin.map((item) => (
+            {pieData.map((item) => (
               <div key={item.name} className="flex flex-col">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
@@ -586,7 +641,12 @@ export const DashboardScreen: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center mt-1">
                   <span className="text-xs text-white font-bold">{getPercent(item.value)}%</span>
-                  <span className="text-[10px] text-brand-muted">{item.count} vendas</span>
+                  <span className="text-[10px] text-brand-muted">
+                    {pieChartMode === 'count'
+                      ? `${item.value} vendas`
+                      : formatCurrency(item.value)
+                    }
+                  </span>
                 </div>
               </div>
             ))}
