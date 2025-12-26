@@ -1,29 +1,53 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Camera, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Product, Brand } from '../../types';
-import { generateId } from '../../utils/calculations';
+import { Brand } from '../../types';
 import { Input, Button } from '../common';
 
 export const AddProductScreen: React.FC = () => {
-  const { products, categories, setView, setProducts } = useApp();
+  const { categories, setView, addProduct } = useApp();
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const selectedCategoryData = categories.find(c => c.name === selectedCategory);
+  const subcategories = selectedCategoryData?.subcategories || [];
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
-    const newProduct: Product = {
-      id: generateId(),
-      name: formData.get('name') as string,
-      brand: formData.get('brand') as Brand,
-      category: formData.get('category') as string,
-      stockQuantity: Number(formData.get('quantity')),
-      costPrice: 0,
-      salePrice: 0,
+
+    const name = formData.get('name') as string;
+    const brand = formData.get('brand') as Brand;
+    const category = formData.get('category') as string;
+    const subcategory = formData.get('subcategory') as string;
+    const quantity = Number(formData.get('quantity'));
+    const costPrice = Number(formData.get('costPrice'));
+    const salePrice = Number(formData.get('salePrice'));
+
+    if (!name || !brand || !category) {
+      alert('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    const fullCategory = subcategory ? `${category} - ${subcategory}` : category;
+
+    const newProduct = {
+      name,
+      brand,
+      category: fullCategory,
+      stockQuantity: quantity,
+      costPrice,
+      salePrice,
       image: 'https://picsum.photos/100/100?random=' + Math.random()
     };
-    setProducts([...products, newProduct]);
-    setView('stock');
+
+    try {
+      await addProduct(newProduct);
+      setView('stock');
+    } catch (err) {
+      console.error('Erro ao adicionar produto:', err);
+    }
   };
 
   return (
