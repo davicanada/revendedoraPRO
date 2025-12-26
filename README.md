@@ -299,7 +299,7 @@ npm run preview  # Preview do build de produção
 - [ ] Backend com API REST
 - [ ] Multi-usuário
 
-## Autor
+## Público Alvo
 
 Desenvolvido para revendedoras autônomas de cosméticos.
 
