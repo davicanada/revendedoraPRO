@@ -14,20 +14,26 @@ import {
    CheckCircle2,
    SprayCan,
    Brush,
-   Package
+   Package,
+   Calendar,
+   Camera,
+   Link as LinkIcon,
+   Image as ImageIcon,
+   ChevronRight
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Product, SaleType } from '../../types';
+import { Product, SaleType, Brand } from '../../types';
 import { formatCurrency } from '../../utils/calculations';
 
 interface CartItem {
    product: Product;
    quantity: number;
    unitPrice: number;
+   customProfit?: number; // Para vendas online: lucro líquido informado pelo usuário
 }
 
 export const NewSaleScreen: React.FC = () => {
-   const { products, customers, setView, addSale, updateProduct, updateCustomer, settings } = useApp();
+   const { products, customers, setView, addSale, updateProduct, updateCustomer, settings, addProduct, categories } = useApp();
 
    // Cart now stores unitPrice to allow user override
    const [cart, setCart] = useState<CartItem[]>([]);
@@ -38,6 +44,51 @@ export const NewSaleScreen: React.FC = () => {
    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
    const [discount, setDiscount] = useState('');
    const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+
+   // Quick Add Product Modal States
+   const [showQuickAddProduct, setShowQuickAddProduct] = useState(false);
+   const [quickSearchTerm, setQuickSearchTerm] = useState('');
+   const [selectedExistingProduct, setSelectedExistingProduct] = useState<Product | null>(null);
+   const [quickProductName, setQuickProductName] = useState('');
+   const [quickProductBrand, setQuickProductBrand] = useState('');
+   const [quickProductCategory, setQuickProductCategory] = useState('');
+   const [quickProductSubcategory, setQuickProductSubcategory] = useState('');
+   const [quickProductCostPrice, setQuickProductCostPrice] = useState('');
+   const [quickImageUrl, setQuickImageUrl] = useState('');
+   const [showQuickCamera, setShowQuickCamera] = useState(false);
+   const [showQuickUrlInput, setShowQuickUrlInput] = useState(false);
+   const quickVideoRef = React.useRef<HTMLVideoElement>(null);
+   const quickStreamRef = React.useRef<MediaStream | null>(null);
+
+   // Formatar data atual como dd/mm/yyyy
+   const formatDateToInput = (date: Date): string => {
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+   };
+
+   const [saleDate, setSaleDate] = useState(formatDateToInput(new Date()));
+
+   // Converter dd/mm/yyyy para Date (ao meio-dia para evitar problemas de timezone)
+   const parseDateFromInput = (dateStr: string): Date => {
+      const [day, month, year] = dateStr.split('/').map(Number);
+      return new Date(year, month - 1, day, 12, 0, 0, 0);
+   };
+
+   // Validar e formatar data ao digitar
+   const handleDateChange = (value: string) => {
+      // Remove tudo exceto números
+      const numbers = value.replace(/\D/g, '');
+
+      if (numbers.length <= 2) {
+         setSaleDate(numbers);
+      } else if (numbers.length <= 4) {
+         setSaleDate(`${numbers.slice(0, 2)}/${numbers.slice(2)}`);
+      } else {
+         setSaleDate(`${numbers.slice(0, 2)}/${numbers.slice(2, 4)}/${numbers.slice(4, 8)}`);
+      }
+   };
 
    const filteredProducts = useMemo(() => {
       return products.filter(p => {
@@ -67,10 +118,10 @@ export const NewSaleScreen: React.FC = () => {
          return;
       }
 
-      // Default Price Logic: Cost + defaultCommission for Physical, Catalog Price for Online
+      // Default Price Logic: Cost + physicalProfitMargin for Physical, Catalog Price (costPrice) for Online
       const defaultPrice = saleType === SaleType.PHYSICAL
-         ? product.costPrice * (1 + settings.defaultCommission)
-         : product.salePrice;
+         ? product.costPrice * (1 + settings.physicalProfitMargin)
+         : product.costPrice;
 
       if (existingItem) {
          if (saleType === SaleType.PHYSICAL && existingItem.quantity >= product.stockQuantity) {
@@ -98,8 +149,26 @@ export const NewSaleScreen: React.FC = () => {
       const price = parseFloat(newPrice);
       if (isNaN(price) || price < 0) return;
       setCart(cart.map(item =>
-         item.product.id === productId ? { ...item, unitPrice: price } : item
+         item.product.id === productId ? { ...item, unitPrice: price, customProfit: undefined } : item
       ));
+   };
+
+   // Atualizar lucro customizado para vendas online
+   const updateCustomProfit = (productId: string, profitValue: string) => {
+      const profit = parseFloat(profitValue);
+      if (isNaN(profit) || profit < 0) return;
+
+      setCart(cart => cart.map(item => {
+         if (item.product.id !== productId) return item;
+
+         // Calcular preço unitário baseado no lucro informado
+         // Se lucro = R$ 100 e comissão = 15%, então totalVenda = 100 / 0.15 = 666.67
+         // Preço unitário = 666.67 / quantidade
+         const totalSaleValue = profit / settings.defaultCommission;
+         const newUnitPrice = totalSaleValue / item.quantity;
+
+         return { ...item, customProfit: profit, unitPrice: newUnitPrice };
+      }));
    };
 
    const getQuantityInCart = (productId: string) => {
@@ -122,16 +191,197 @@ export const NewSaleScreen: React.FC = () => {
    const totalSale = Math.max(0, subtotal - discountValue);
 
    // Profit Logic: (Revenue - Cost) - Discount
-   // For Online: Revenue * 0.15 (commission) - Discount (assuming discount eats commission)
+   // For Online: Se customProfit definido, usar ele. Senão, Revenue * commission - Discount
    // For Physical: (Revenue - Cost) - Discount
    const totalProfit = useMemo(() => {
       if (saleType === SaleType.ONLINE) {
+         // Se todos os itens têm customProfit, somar eles
+         const hasAllCustomProfits = cart.length > 0 && cart.every(item => item.customProfit !== undefined);
+         if (hasAllCustomProfits) {
+            const totalCustomProfit = cart.reduce((acc, item) => acc + (item.customProfit || 0), 0);
+            return totalCustomProfit - discountValue;
+         }
+         // Senão, calcular baseado na comissão
          const commission = subtotal * settings.defaultCommission;
          return commission - discountValue;
       } else {
          return (subtotal - totalCost) - discountValue;
       }
-   }, [subtotal, totalCost, discountValue, saleType, settings.defaultCommission]);
+   }, [cart, subtotal, totalCost, discountValue, saleType, settings.defaultCommission]);
+
+   // Quick Add Product Functions
+   const quickFilteredProducts = useMemo(() => {
+      if (!quickSearchTerm.trim()) return [];
+      return products.filter(p =>
+         p.name.toLowerCase().includes(quickSearchTerm.toLowerCase()) ||
+         p.brand.toLowerCase().includes(quickSearchTerm.toLowerCase())
+      ).slice(0, 5);
+   }, [quickSearchTerm, products]);
+
+   const selectedCategoryData = categories.find(c => c.name === quickProductCategory);
+   const quickSubcategories = selectedCategoryData?.subcategories || [];
+
+   const handleQuickSelectExistingProduct = (product: Product) => {
+      setSelectedExistingProduct(product);
+      setQuickSearchTerm(product.name);
+   };
+
+   // Converter arquivo para base64
+   const fileToBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+         const reader = new FileReader();
+         reader.onload = () => resolve(reader.result as string);
+         reader.onerror = reject;
+         reader.readAsDataURL(file);
+      });
+   };
+
+   // Selecionar da galeria
+   const handleQuickGallerySelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+         if (!file.type.startsWith('image/')) {
+            alert('Por favor, selecione apenas imagens');
+            return;
+         }
+         if (file.size > 5 * 1024 * 1024) {
+            alert('A imagem deve ter no máximo 5MB');
+            return;
+         }
+         try {
+            const base64 = await fileToBase64(file);
+            setQuickImageUrl(base64);
+            setShowQuickUrlInput(false);
+         } catch (err) {
+            console.error('Erro ao processar imagem:', err);
+            alert('Erro ao processar imagem');
+         }
+      }
+   };
+
+   // Abrir câmera
+   const handleQuickOpenCamera = async () => {
+      try {
+         const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false
+         });
+         quickStreamRef.current = stream;
+         setShowQuickCamera(true);
+
+         setTimeout(() => {
+            if (quickVideoRef.current) {
+               quickVideoRef.current.srcObject = stream;
+            }
+         }, 100);
+      } catch (err) {
+         console.error('Erro ao acessar câmera:', err);
+         alert('Não foi possível acessar a câmera. Verifique as permissões.');
+      }
+   };
+
+   // Capturar foto
+   const handleQuickCapturePhoto = () => {
+      if (quickVideoRef.current) {
+         const canvas = document.createElement('canvas');
+         canvas.width = quickVideoRef.current.videoWidth;
+         canvas.height = quickVideoRef.current.videoHeight;
+         const ctx = canvas.getContext('2d');
+         if (ctx) {
+            ctx.drawImage(quickVideoRef.current, 0, 0);
+            const photoData = canvas.toDataURL('image/jpeg', 0.8);
+            setQuickImageUrl(photoData);
+            setShowQuickUrlInput(false);
+            handleQuickCloseCamera();
+         }
+      }
+   };
+
+   // Fechar câmera
+   const handleQuickCloseCamera = () => {
+      if (quickStreamRef.current) {
+         quickStreamRef.current.getTracks().forEach(track => track.stop());
+         quickStreamRef.current = null;
+      }
+      setShowQuickCamera(false);
+   };
+
+   // Cleanup câmera
+   React.useEffect(() => {
+      return () => {
+         if (quickStreamRef.current) {
+            quickStreamRef.current.getTracks().forEach(track => track.stop());
+         }
+      };
+   }, []);
+
+   const handleQuickAddProduct = async () => {
+      // Verificar se produto já existe
+      if (selectedExistingProduct) {
+         alert(`Este produto já existe no sistema!\nEstoque atual: ${selectedExistingProduct.stockQuantity} unidades\n\nSelecione o produto na lista de vendas para adicioná-lo ao carrinho.`);
+         return;
+      }
+
+      if (!quickProductName.trim()) {
+         alert('Por favor, insira o nome do produto.');
+         return;
+      }
+
+      if (!quickProductBrand) {
+         alert('Por favor, selecione uma marca.');
+         return;
+      }
+
+      if (!quickProductCategory) {
+         alert('Por favor, selecione uma categoria.');
+         return;
+      }
+
+      if (!quickProductCostPrice) {
+         alert('Por favor, insira o preço de catálogo.');
+         return;
+      }
+
+      const costPrice = parseFloat(quickProductCostPrice);
+      if (isNaN(costPrice) || costPrice <= 0) {
+         alert('Preço de catálogo inválido.');
+         return;
+      }
+
+      const fullCategory = quickProductSubcategory
+         ? `${quickProductCategory} - ${quickProductSubcategory}`
+         : quickProductCategory;
+
+      const newProduct = {
+         name: quickProductName,
+         brand: quickProductBrand as Brand, // Cast para tipo Brand
+         category: fullCategory,
+         costPrice: costPrice,
+         salePrice: costPrice * (1 + settings.physicalProfitMargin),
+         stockQuantity: 0,
+         image: quickImageUrl || 'https://via.placeholder.com/150/2A4535/f9a8d4?text=' + quickProductName.charAt(0).toUpperCase()
+      };
+
+      try {
+         await addProduct(newProduct);
+         alert('Produto cadastrado com sucesso!\n\nVocê já pode selecioná-lo para adicionar à venda.');
+
+         // Limpar e fechar
+         setShowQuickAddProduct(false);
+         setQuickSearchTerm('');
+         setSelectedExistingProduct(null);
+         setQuickProductName('');
+         setQuickProductBrand('');
+         setQuickProductCategory('');
+         setQuickProductSubcategory('');
+         setQuickProductCostPrice('');
+         setQuickImageUrl('');
+         setShowQuickUrlInput(false);
+      } catch (err) {
+         console.error('Erro ao cadastrar produto:', err);
+         alert('Erro ao cadastrar produto.');
+      }
+   };
 
    const handleFinalizeSale = async () => {
       if (!selectedCustomerId) {
@@ -143,12 +393,21 @@ export const NewSaleScreen: React.FC = () => {
          return;
       }
 
+      // Validar formato da data
+      if (saleDate.length !== 10 || !saleDate.includes('/')) {
+         alert("Por favor, insira uma data válida no formato dd/mm/yyyy.");
+         return;
+      }
+
       const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+
+      // Converter a data para ISO
+      const saleDateISO = parseDateFromInput(saleDate).toISOString();
 
       const newSale = {
          customerId: selectedCustomerId,
          customerName: selectedCustomer ? selectedCustomer.name : 'Cliente Desconhecido',
-         date: new Date().toISOString(),
+         date: saleDateISO,
          type: saleType,
          totalAmount: totalSale,
          profit: totalProfit,
@@ -180,7 +439,7 @@ export const NewSaleScreen: React.FC = () => {
          if (selectedCustomer) {
             await updateCustomer(selectedCustomerId, {
                totalSpent: selectedCustomer.totalSpent + totalSale,
-               lastPurchaseDate: new Date().toISOString()
+               lastPurchaseDate: saleDateISO
             });
          }
 
@@ -192,6 +451,273 @@ export const NewSaleScreen: React.FC = () => {
 
    return (
       <div className="flex flex-col h-screen bg-brand-dark">
+         {/* Quick Add Product Modal */}
+         {showQuickAddProduct && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+               <div className="bg-brand-dark rounded-2xl max-w-lg w-full border border-white/10 max-h-[90vh] overflow-hidden flex flex-col">
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between p-6 border-b border-white/5">
+                     <div>
+                        <h2 className="text-xl font-bold text-white">Cadastro Rápido</h2>
+                        <p className="text-brand-muted text-xs mt-1">Produto sem estoque físico</p>
+                     </div>
+                     <button
+                        onClick={() => {
+                           setShowQuickAddProduct(false);
+                           setQuickSearchTerm('');
+                           setSelectedExistingProduct(null);
+                           setQuickProductName('');
+                           setQuickProductBrand('');
+                           setQuickProductCategory('');
+                           setQuickProductSubcategory('');
+                           setQuickProductCostPrice('');
+                           setQuickImageUrl('');
+                           setShowQuickUrlInput(false);
+                        }}
+                        className="text-brand-muted hover:text-white"
+                     >
+                        <X size={24} />
+                     </button>
+                  </div>
+
+                  {/* Modal Content */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                     {/* Busca de Produtos Existentes */}
+                     <div>
+                        <label className="block text-sm text-brand-muted mb-2">Buscar Produto Existente</label>
+                        <div className="relative">
+                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" size={18} />
+                           <input
+                              type="text"
+                              value={quickSearchTerm}
+                              onChange={(e) => {
+                                 setQuickSearchTerm(e.target.value);
+                                 if (selectedExistingProduct) setSelectedExistingProduct(null);
+                                 setQuickProductName(e.target.value);
+                              }}
+                              placeholder="Digite o nome do produto..."
+                              className="w-full bg-brand-surface text-white rounded-xl py-3 pl-11 pr-4 outline-none border border-transparent focus:border-brand-primary/50 text-sm"
+                           />
+                        </div>
+
+                        {/* Lista de produtos encontrados */}
+                        {quickFilteredProducts.length > 0 && !selectedExistingProduct && (
+                           <div className="mt-2 bg-brand-surface rounded-xl border border-white/5 overflow-hidden">
+                              {quickFilteredProducts.map((product) => (
+                                 <button
+                                    key={product.id}
+                                    type="button"
+                                    onClick={() => handleQuickSelectExistingProduct(product)}
+                                    className="w-full flex items-center gap-3 p-3 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-b-0"
+                                 >
+                                    <div className="w-8 h-8 rounded-lg bg-brand-primary/10 flex items-center justify-center flex-shrink-0">
+                                       <Package size={16} className="text-brand-primary" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                       <p className="text-white text-sm font-medium truncate">{product.name}</p>
+                                       <p className="text-brand-muted text-xs">{product.brand} • Estoque: {product.stockQuantity}</p>
+                                    </div>
+                                    <ChevronRight size={16} className="text-brand-muted" />
+                                 </button>
+                              ))}
+                           </div>
+                        )}
+
+                        {selectedExistingProduct && (
+                           <div className="mt-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                              <p className="text-red-400 text-xs font-medium mb-1">⚠ Produto já cadastrado!</p>
+                              <p className="text-white text-sm">{selectedExistingProduct.name}</p>
+                              <p className="text-brand-muted text-xs">
+                                 Estoque: {selectedExistingProduct.stockQuantity} unidades •
+                                 Preço: R$ {selectedExistingProduct.costPrice.toFixed(2)}
+                              </p>
+                           </div>
+                        )}
+                     </div>
+
+                     {!selectedExistingProduct && (
+                        <>
+                           <div className="h-px bg-white/10"></div>
+
+                           {/* Imagem */}
+                           <div>
+                              <div className="w-full h-32 bg-brand-surface/30 border-2 border-dashed border-brand-primary/20 rounded-xl flex flex-col items-center justify-center mb-3 overflow-hidden">
+                                 {quickImageUrl ? (
+                                    <img src={quickImageUrl} alt="Preview" className="w-full h-full object-cover" />
+                                 ) : (
+                                    <>
+                                       <ImageIcon size={20} className="text-brand-muted mb-1" />
+                                       <span className="text-xs text-brand-muted">Imagem do produto</span>
+                                    </>
+                                 )}
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2">
+                                 <button
+                                    type="button"
+                                    onClick={handleQuickOpenCamera}
+                                    className="flex flex-col items-center gap-1 p-2 bg-brand-surface rounded-lg cursor-pointer hover:bg-white/5 transition-colors border border-white/5"
+                                 >
+                                    <Camera size={16} className="text-brand-primary" />
+                                    <span className="text-[10px] text-brand-muted">Câmera</span>
+                                 </button>
+                                 <label className="flex flex-col items-center gap-1 p-2 bg-brand-surface rounded-lg cursor-pointer hover:bg-white/5 transition-colors border border-white/5">
+                                    <ImageIcon size={16} className="text-brand-primary" />
+                                    <span className="text-[10px] text-brand-muted">Galeria</span>
+                                    <input
+                                       type="file"
+                                       accept="image/*"
+                                       onChange={handleQuickGallerySelect}
+                                       className="hidden"
+                                    />
+                                 </label>
+                                 <button
+                                    type="button"
+                                    onClick={() => setShowQuickUrlInput(!showQuickUrlInput)}
+                                    className="flex flex-col items-center gap-1 p-2 bg-brand-surface rounded-lg cursor-pointer hover:bg-white/5 transition-colors border border-white/5"
+                                 >
+                                    <LinkIcon size={16} className="text-brand-primary" />
+                                    <span className="text-[10px] text-brand-muted">URL</span>
+                                 </button>
+                              </div>
+
+                              {showQuickUrlInput && (
+                                 <div className="mt-3">
+                                    <input
+                                       type="text"
+                                       value={quickImageUrl.startsWith('data:') ? '' : quickImageUrl}
+                                       onChange={(e) => setQuickImageUrl(e.target.value)}
+                                       placeholder="Cole a URL da imagem aqui..."
+                                       className="w-full bg-brand-surface text-white rounded-xl py-2 px-3 outline-none border border-brand-primary/50 text-xs"
+                                    />
+                                 </div>
+                              )}
+                           </div>
+
+                           {/* Marca */}
+                           <div>
+                              <label className="block text-sm text-brand-muted mb-2">Marca *</label>
+                              <div className="relative">
+                                 <select
+                                    value={quickProductBrand}
+                                    onChange={(e) => setQuickProductBrand(e.target.value)}
+                                    className="w-full appearance-none bg-brand-surface text-white rounded-xl py-3 px-4 pr-10 outline-none border border-transparent focus:border-brand-primary/50 text-sm"
+                                 >
+                                    <option value="">Selecione uma marca</option>
+                                    <option value={Brand.NATURA}>{Brand.NATURA}</option>
+                                    <option value={Brand.AVON}>{Brand.AVON}</option>
+                                    <option value={Brand.OTHER}>{Brand.OTHER}</option>
+                                 </select>
+                                 <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+                              </div>
+                           </div>
+
+                           {/* Categoria */}
+                           <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                 <label className="block text-sm text-brand-muted mb-2">Categoria *</label>
+                                 <div className="relative">
+                                    <select
+                                       value={quickProductCategory}
+                                       onChange={(e) => {
+                                          setQuickProductCategory(e.target.value);
+                                          setQuickProductSubcategory('');
+                                       }}
+                                       className="w-full appearance-none bg-brand-surface text-white rounded-xl py-3 px-4 pr-10 outline-none border border-transparent focus:border-brand-primary/50 text-sm"
+                                    >
+                                       <option value="">Selecione</option>
+                                       {categories.map(cat => (
+                                          <option key={cat.name} value={cat.name}>{cat.name}</option>
+                                       ))}
+                                    </select>
+                                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+                                 </div>
+                              </div>
+
+                              {quickSubcategories.length > 0 && (
+                                 <div>
+                                    <label className="block text-sm text-brand-muted mb-2">Subcategoria</label>
+                                    <div className="relative">
+                                       <select
+                                          value={quickProductSubcategory}
+                                          onChange={(e) => setQuickProductSubcategory(e.target.value)}
+                                          className="w-full appearance-none bg-brand-surface text-white rounded-xl py-3 px-4 pr-10 outline-none border border-transparent focus:border-brand-primary/50 text-sm"
+                                       >
+                                          <option value="">Nenhuma</option>
+                                          {quickSubcategories.map(sub => (
+                                             <option key={sub} value={sub}>{sub}</option>
+                                          ))}
+                                       </select>
+                                       <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted pointer-events-none" />
+                                    </div>
+                                 </div>
+                              )}
+                           </div>
+
+                           {/* Preço de Catálogo */}
+                           <div>
+                              <label className="block text-sm text-brand-muted mb-2">Preço de Catálogo *</label>
+                              <div className="relative">
+                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted text-sm">R$</span>
+                                 <input
+                                    type="number"
+                                    step="0.01"
+                                    value={quickProductCostPrice}
+                                    onChange={(e) => setQuickProductCostPrice(e.target.value)}
+                                    placeholder="0,00"
+                                    className="w-full bg-brand-surface text-white rounded-xl py-3 px-4 pl-12 outline-none border border-transparent focus:border-brand-primary/50 text-sm"
+                                 />
+                              </div>
+                              <p className="text-xs text-brand-muted mt-1">Valor pelo qual o cliente paga</p>
+                           </div>
+                        </>
+                     )}
+                  </div>
+
+                  {/* Modal Footer */}
+                  {!selectedExistingProduct && (
+                     <div className="p-6 border-t border-white/5">
+                        <button
+                           onClick={handleQuickAddProduct}
+                           className="w-full bg-brand-primary text-brand-dark font-bold py-3.5 rounded-xl hover:brightness-105 transition-all"
+                        >
+                           Cadastrar Produto
+                        </button>
+                     </div>
+                  )}
+               </div>
+            </div>
+         )}
+
+         {/* Camera Modal */}
+         {showQuickCamera && (
+            <div className="fixed inset-0 bg-black z-[60] flex flex-col">
+               <div className="flex items-center justify-between p-4 bg-black/50">
+                  <button onClick={handleQuickCloseCamera} className="text-white">
+                     <X size={24} />
+                  </button>
+                  <h3 className="text-white font-semibold">Capturar Foto</h3>
+                  <div className="w-6"></div>
+               </div>
+               <div className="flex-1 relative">
+                  <video
+                     ref={quickVideoRef}
+                     autoPlay
+                     playsInline
+                     className="w-full h-full object-cover"
+                  />
+               </div>
+               <div className="p-6 bg-black/50">
+                  <button
+                     onClick={handleQuickCapturePhoto}
+                     className="w-full bg-white text-black font-bold py-4 rounded-xl"
+                  >
+                     Capturar Foto
+                  </button>
+               </div>
+            </div>
+         )}
+
          {/* Header */}
          <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-4 bg-brand-dark/90 backdrop-blur-md border-b border-white/5">
             <button onClick={() => setView('dashboard')} className="flex w-10 h-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors">
@@ -221,7 +747,10 @@ export const NewSaleScreen: React.FC = () => {
                   </button>
                </div>
                <p className="mt-2 text-xs text-center text-brand-muted">
-                  {saleType === SaleType.PHYSICAL ? `Preço sugerido: Custo Médio + ${(settings.defaultCommission * 100).toFixed(0)}%` : `Comissão fixa de ${(settings.defaultCommission * 100).toFixed(0)}% sobre a venda`}
+                  {saleType === SaleType.PHYSICAL
+                     ? `Preço sugerido: Custo Médio + ${(settings.physicalProfitMargin * 100).toFixed(0)}%`
+                     : `Preço = Catálogo • Lucro = ${(settings.defaultCommission * 100).toFixed(0)}% de comissão`
+                  }
                </p>
             </div>
 
@@ -247,6 +776,24 @@ export const NewSaleScreen: React.FC = () => {
                <button onClick={() => setView('add-customer')} className="flex items-center gap-1 ml-1 text-xs text-brand-primary font-medium hover:text-white transition-colors self-start">
                   <UserPlus size={14} /> Novo Cliente Rápido
                </button>
+            </div>
+
+            {/* Sale Date */}
+            <div className="flex flex-col gap-2">
+               <label className="text-sm font-semibold text-gray-300 ml-1">Data da Venda</label>
+               <div className="relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-brand-muted">
+                     <Calendar size={20} />
+                  </div>
+                  <input
+                     type="text"
+                     value={saleDate}
+                     onChange={(e) => handleDateChange(e.target.value)}
+                     placeholder="dd/mm/yyyy"
+                     maxLength={10}
+                     className="w-full rounded-xl bg-brand-surface py-4 pl-10 pr-4 text-base shadow-sm border border-white/10 focus:border-brand-primary text-white placeholder-gray-500 outline-none transition-all"
+                  />
+               </div>
             </div>
 
             {/* Product Search & Filter */}
@@ -305,6 +852,17 @@ export const NewSaleScreen: React.FC = () => {
                      </button>
                   ))}
                </div>
+
+               {/* Quick Add Product Button (Only for Online Sales) */}
+               {saleType === SaleType.ONLINE && (
+                  <button
+                     onClick={() => setShowQuickAddProduct(true)}
+                     className="w-full mt-2 flex items-center justify-center gap-2 bg-brand-primary/10 border border-brand-primary/30 text-brand-primary py-3 rounded-xl hover:bg-brand-primary/20 transition-all"
+                  >
+                     <Plus size={18} />
+                     <span className="text-sm font-semibold">Cadastrar Produto Novo</span>
+                  </button>
+               )}
             </div>
 
             {/* Product List / Cart */}
@@ -333,11 +891,9 @@ export const NewSaleScreen: React.FC = () => {
                                  <p className="truncate text-sm font-medium text-white group-hover:text-brand-primary transition-colors">{product.name}</p>
                                  <div className="flex flex-col">
                                     <p className="truncate text-xs text-brand-muted">{product.brand}</p>
-                                    {saleType === SaleType.PHYSICAL && (
-                                       <span className="text-[10px] text-brand-muted flex items-center gap-1">
-                                          Custo Médio: {formatCurrency(product.costPrice)}
-                                       </span>
-                                    )}
+                                    <span className="text-[10px] text-brand-muted flex items-center gap-1">
+                                       {saleType === SaleType.PHYSICAL ? 'Custo Médio' : 'Catálogo'}: {formatCurrency(product.costPrice)}
+                                    </span>
                                  </div>
                               </div>
 
@@ -357,17 +913,45 @@ export const NewSaleScreen: React.FC = () => {
 
                            {/* Price Input (Only show if in cart) */}
                            {qty > 0 && cartItem && (
-                              <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between animate-fade-in">
-                                 <span className="text-xs text-brand-muted">Preço Unitário</span>
-                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs text-brand-muted">R$</span>
-                                    <input
-                                       type="number"
-                                       value={cartItem.unitPrice.toFixed(2)}
-                                       onChange={(e) => updateCartItemPrice(product.id, e.target.value)}
-                                       className="w-20 bg-[#1a121d] text-white text-right text-sm font-medium rounded p-1 border border-white/10 focus:border-brand-primary outline-none"
-                                    />
-                                 </div>
+                              <div className="mt-3 pt-2 border-t border-white/5 space-y-2 animate-fade-in">
+                                 {saleType === SaleType.ONLINE ? (
+                                    // Para vendas online: mostrar campo "Valor Recebido"
+                                    <>
+                                       <div className="flex items-center justify-between">
+                                          <span className="text-xs text-brand-muted">Valor Recebido</span>
+                                          <div className="flex items-center gap-2">
+                                             <span className="text-xs text-brand-muted">R$</span>
+                                             <input
+                                                type="number"
+                                                step="0.01"
+                                                value={cartItem.customProfit?.toFixed(2) || ''}
+                                                onChange={(e) => updateCustomProfit(product.id, e.target.value)}
+                                                placeholder="0,00"
+                                                className="w-20 bg-[#1a121d] text-white text-right text-sm font-medium rounded p-1 border border-white/10 focus:border-brand-primary outline-none"
+                                             />
+                                          </div>
+                                       </div>
+                                       <div className="flex items-center justify-between text-[10px]">
+                                          <span className="text-brand-muted/60">Preço Unit. Calculado</span>
+                                          <span className="text-brand-muted/80">{formatCurrency(cartItem.unitPrice)}</span>
+                                       </div>
+                                    </>
+                                 ) : (
+                                    // Para vendas físicas: mostrar campo "Preço Unitário"
+                                    <div className="flex items-center justify-between">
+                                       <span className="text-xs text-brand-muted">Preço Unitário</span>
+                                       <div className="flex items-center gap-2">
+                                          <span className="text-xs text-brand-muted">R$</span>
+                                          <input
+                                             type="number"
+                                             step="0.01"
+                                             value={cartItem.unitPrice.toFixed(2)}
+                                             onChange={(e) => updateCartItemPrice(product.id, e.target.value)}
+                                             className="w-20 bg-[#1a121d] text-white text-right text-sm font-medium rounded p-1 border border-white/10 focus:border-brand-primary outline-none"
+                                          />
+                                       </div>
+                                    </div>
+                                 )}
                               </div>
                            )}
                         </div>

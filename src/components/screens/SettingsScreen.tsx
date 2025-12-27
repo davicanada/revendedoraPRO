@@ -17,9 +17,17 @@ import { useApp } from '../../context/AppContext';
 import { Toggle } from '../common';
 
 export const SettingsScreen: React.FC = () => {
-   const { setView, logout, user, updateUserProfile } = useApp();
+   const { setView, logout, user, updateUserProfile, settings, updateSettings } = useApp();
    const fileInputRef = useRef<HTMLInputElement>(null);
    const [uploading, setUploading] = useState(false);
+   const [onlineCommission, setOnlineCommission] = useState((settings.defaultCommission * 100).toString());
+   const [physicalMargin, setPhysicalMargin] = useState((settings.physicalProfitMargin * 100).toString());
+
+   // Sincronizar com mudanças de settings
+   React.useEffect(() => {
+      setOnlineCommission((settings.defaultCommission * 100).toString());
+      setPhysicalMargin((settings.physicalProfitMargin * 100).toString());
+   }, [settings.defaultCommission, settings.physicalProfitMargin]);
 
    const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
    const userAvatar = user?.user_metadata?.avatar_url || 'https://via.placeholder.com/100/2A4535/f9a8d4?text=' + userName.charAt(0).toUpperCase();
@@ -48,6 +56,36 @@ export const SettingsScreen: React.FC = () => {
       } catch (err) {
          setUploading(false);
          console.error('Error uploading avatar:', err);
+      }
+   };
+
+   const handleSaveCommission = async () => {
+      const value = parseFloat(onlineCommission);
+      if (isNaN(value) || value < 0 || value > 100) {
+         alert('Por favor, insira um valor entre 0 e 100');
+         setOnlineCommission((settings.defaultCommission * 100).toString());
+         return;
+      }
+      try {
+         await updateSettings({ defaultCommission: value / 100 });
+      } catch (err) {
+         console.error('Erro ao salvar comissão:', err);
+         setOnlineCommission((settings.defaultCommission * 100).toString());
+      }
+   };
+
+   const handleSaveMargin = async () => {
+      const value = parseFloat(physicalMargin);
+      if (isNaN(value) || value < 0 || value > 100) {
+         alert('Por favor, insira um valor entre 0 e 100');
+         setPhysicalMargin((settings.physicalProfitMargin * 100).toString());
+         return;
+      }
+      try {
+         await updateSettings({ physicalProfitMargin: value / 100 });
+      } catch (err) {
+         console.error('Erro ao salvar margem:', err);
+         setPhysicalMargin((settings.physicalProfitMargin * 100).toString());
       }
    };
 
@@ -108,17 +146,43 @@ export const SettingsScreen: React.FC = () => {
                <div className="bg-brand-surface rounded-2xl p-4 border border-white/5 space-y-4">
                   <div>
                      <div className="flex justify-between items-center mb-2">
-                        <label className="text-sm text-white font-medium">Comissão Online Padrão</label>
+                        <label className="text-sm text-white font-medium">Comissão Online</label>
                         <span className="text-[10px] bg-[#332636] text-brand-muted px-2 py-0.5 rounded">% por venda</span>
                      </div>
                      <div className="relative">
                         <input
                            type="number"
-                           defaultValue={15}
+                           step="0.1"
+                           min="0"
+                           max="100"
+                           value={onlineCommission}
+                           onChange={(e) => setOnlineCommission(e.target.value)}
+                           onBlur={handleSaveCommission}
                            className="w-full bg-[#1a121d] text-white rounded-xl py-3 px-4 outline-none border border-transparent focus:border-brand-primary/50"
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted font-bold">%</span>
                      </div>
+                     <p className="text-xs text-brand-muted mt-1">Seu lucro sobre vendas por link/catálogo</p>
+                  </div>
+                  <div>
+                     <div className="flex justify-between items-center mb-2">
+                        <label className="text-sm text-white font-medium">Margem de Lucro Física</label>
+                        <span className="text-[10px] bg-[#332636] text-brand-muted px-2 py-0.5 rounded">% sobre custo</span>
+                     </div>
+                     <div className="relative">
+                        <input
+                           type="number"
+                           step="0.1"
+                           min="0"
+                           max="100"
+                           value={physicalMargin}
+                           onChange={(e) => setPhysicalMargin(e.target.value)}
+                           onBlur={handleSaveMargin}
+                           className="w-full bg-[#1a121d] text-white rounded-xl py-3 px-4 outline-none border border-transparent focus:border-brand-primary/50"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-muted font-bold">%</span>
+                     </div>
+                     <p className="text-xs text-brand-muted mt-1">Lucro sugerido sobre custo de produtos físicos</p>
                   </div>
                   <button
                      onClick={() => setView('credit-cards')}

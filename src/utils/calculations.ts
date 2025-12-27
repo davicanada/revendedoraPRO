@@ -58,6 +58,18 @@ export const formatCurrency = (value: number): string => {
 };
 
 /**
+ * Formata data ISO para formato brasileiro dd/mm/yyyy
+ * Corrige problemas de timezone garantindo que a data exibida seja a mesma inserida
+ */
+export const formatDateBR = (isoDate: string): string => {
+  const date = new Date(isoDate);
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+/**
  * Calcula métricas do dashboard
  */
 export const calculateDashboardMetrics = (

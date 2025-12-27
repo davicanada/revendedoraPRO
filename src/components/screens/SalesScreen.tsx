@@ -3,7 +3,7 @@ import { Plus, ShoppingBag, DollarSign, TrendingUp, Percent, Hash } from 'lucide
 import { Button, Card } from '../common';
 import { useApp } from '../../context/AppContext';
 import { SaleType } from '../../types';
-import { formatCurrency } from '../../utils/calculations';
+import { formatCurrency, formatDateBR } from '../../utils/calculations';
 
 export const SalesScreen: React.FC = () => {
   const { sales, setView } = useApp();
@@ -104,7 +104,7 @@ export const SalesScreen: React.FC = () => {
                     <div>
                       <h4 className="text-white font-semibold text-sm">{sale.customerName}</h4>
                       <p className="text-brand-muted text-xs mt-1">
-                        {new Date(sale.date).toLocaleDateString('pt-BR')} •{' '}
+                        {formatDateBR(sale.date)} •{' '}
                         <span
                           className={`${sale.type === SaleType.ONLINE ? 'text-purple-400' : 'text-blue-400'
                             }`}

@@ -69,7 +69,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const STORAGE_KEY = 'revendedora-pro-cache';
 
 const defaultSettings: AppSettings = {
-  defaultCommission: 0.15,
+  defaultCommission: 0.15, // 15% comissão online
+  physicalProfitMargin: 0.15, // 15% margem de lucro físico
   lowStockThreshold: 3,
   currency: 'BRL'
 };

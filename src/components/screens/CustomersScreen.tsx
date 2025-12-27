@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ArrowLeft, Plus, Search, ShoppingBag, Users, DollarSign, TrendingUp, UserCheck } from 'lucide-react';
 import { Button, Card } from '../common';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency } from '../../utils/calculations';
+import { formatCurrency, formatDateBR } from '../../utils/calculations';
 
 export const CustomersScreen: React.FC = () => {
   const { customers, sales, setView } = useApp();
@@ -174,7 +174,7 @@ export const CustomersScreen: React.FC = () => {
                       </span>
                       {customer.lastPurchaseDate && (
                         <span className="text-brand-muted">
-                          Última compra: {new Date(customer.lastPurchaseDate).toLocaleDateString('pt-BR')}
+                          Última compra: {formatDateBR(customer.lastPurchaseDate)}
                         </span>
                       )}
                     </div>

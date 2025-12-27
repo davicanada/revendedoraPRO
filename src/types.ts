@@ -74,7 +74,8 @@ export interface Category {
 }
 
 export interface AppSettings {
-  defaultCommission: number;
+  defaultCommission: number; // Comissão para vendas online (padrão 15%)
+  physicalProfitMargin: number; // Margem de lucro para vendas físicas (padrão 15%)
   lowStockThreshold: number;
   currency: string;
 }

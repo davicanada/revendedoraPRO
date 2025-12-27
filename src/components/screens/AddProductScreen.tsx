@@ -5,7 +5,7 @@ import { Brand, Product } from '../../types';
 import { Input, Button } from '../common';
 
 export const AddProductScreen: React.FC = () => {
-  const { categories, products, setView, addProduct, updateProduct } = useApp();
+  const { categories, products, setView, addProduct, updateProduct, settings } = useApp();
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -160,7 +160,7 @@ export const AddProductScreen: React.FC = () => {
           category: fullCategory,
           stockQuantity: quantity,
           costPrice,
-          salePrice: costPrice * 1.15, // Preço sugerido com 15% de lucro sobre o custo
+          salePrice: costPrice * (1 + settings.physicalProfitMargin), // Preço sugerido baseado na margem configurada
           image: imageUrl || 'https://via.placeholder.com/100/2A4535/f9a8d4?text=' + name.charAt(0).toUpperCase()
         };
         await addProduct(newProduct);
