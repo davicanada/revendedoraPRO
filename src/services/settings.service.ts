@@ -28,18 +28,27 @@ export const settingsService = {
   },
 
   async update(userId: string, settings: Partial<AppSettings>): Promise<void> {
+    console.log('settingsService.update - userId:', userId);
+    console.log('settingsService.update - settings:', settings);
+
     const dbUpdates: any = {};
     if (settings.defaultCommission !== undefined) dbUpdates.default_commission = settings.defaultCommission;
     if (settings.physicalProfitMargin !== undefined) dbUpdates.physical_profit_margin = settings.physicalProfitMargin;
     if (settings.lowStockThreshold !== undefined) dbUpdates.low_stock_threshold = settings.lowStockThreshold;
     if (settings.currency !== undefined) dbUpdates.currency = settings.currency;
 
-    const { error } = await supabase
+    console.log('settingsService.update - dbUpdates:', dbUpdates);
+
+    const { data, error } = await supabase
       .from('settings')
       .upsert({
         user_id: userId,
         ...dbUpdates,
-      });
+      })
+      .select();
+
+    console.log('settingsService.update - data:', data);
+    console.log('settingsService.update - error:', error);
 
     if (error) throw error;
   },

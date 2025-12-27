@@ -105,29 +105,91 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setError(null);
 
     try {
-      // Load all data in parallel
-      const [
-        productsData,
-        customersData,
-        salesData,
-        categoriesData,
-        creditCardsData,
-        settingsData
-      ] = await Promise.all([
-        productsService.getAll(userId),
-        customersService.getAll(userId),
-        salesService.getAll(userId),
-        categoriesService.getAll(userId),
-        creditCardsService.getAll(userId),
-        settingsService.get(userId)
-      ]);
+      console.log('🔄 Iniciando carregamento de dados do Supabase...');
+      console.log('👤 User ID:', userId);
 
-      setProducts(productsData);
-      setCustomers(customersData);
-      setSales(salesData);
-      setCategories(categoriesData.length > 0 ? categoriesData : defaultCategories);
-      setCreditCards(creditCardsData);
-      setSettings(settingsData);
+      // Load data SEQUENTIALLY to avoid connection overload
+      let productsData: Product[] = [];
+      let customersData: Customer[] = [];
+      let salesData: Sale[] = [];
+      let categoriesData: Category[] = [];
+      let creditCardsData: CreditCard[] = [];
+      let settingsData: AppSettings = defaultSettings;
+
+      // 1. Settings (configurações)
+      try {
+        console.log('⏳ Carregando configurações...');
+        settingsData = await settingsService.get(userId);
+        console.log('✅ Configurações carregadas');
+        setSettings(settingsData);
+      } catch (err: any) {
+        console.error('❌ Erro ao carregar configurações:', err);
+        // Continue com valores padrão
+      }
+
+      // Small delay between requests
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 2. Products (produtos)
+      try {
+        console.log('⏳ Carregando produtos...');
+        productsData = await productsService.getAll(userId);
+        console.log(`✅ ${productsData.length} produtos carregados`);
+        setProducts(productsData);
+      } catch (err: any) {
+        console.error('❌ Erro ao carregar produtos:', err);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 3. Customers (clientes)
+      try {
+        console.log('⏳ Carregando clientes...');
+        customersData = await customersService.getAll(userId);
+        console.log(`✅ ${customersData.length} clientes carregados`);
+        setCustomers(customersData);
+      } catch (err: any) {
+        console.error('❌ Erro ao carregar clientes:', err);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 4. Sales (vendas)
+      try {
+        console.log('⏳ Carregando vendas...');
+        salesData = await salesService.getAll(userId);
+        console.log(`✅ ${salesData.length} vendas carregadas`);
+        setSales(salesData);
+      } catch (err: any) {
+        console.error('❌ Erro ao carregar vendas:', err);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 5. Categories (categorias)
+      try {
+        console.log('⏳ Carregando categorias...');
+        categoriesData = await categoriesService.getAll(userId);
+        console.log(`✅ ${categoriesData.length} categorias carregadas`);
+        setCategories(categoriesData.length > 0 ? categoriesData : defaultCategories);
+      } catch (err: any) {
+        console.error('❌ Erro ao carregar categorias:', err);
+        setCategories(defaultCategories);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 6. Credit Cards (cartões)
+      try {
+        console.log('⏳ Carregando cartões de crédito...');
+        creditCardsData = await creditCardsService.getAll(userId);
+        console.log(`✅ ${creditCardsData.length} cartões carregados`);
+        setCreditCards(creditCardsData);
+      } catch (err: any) {
+        console.error('❌ Erro ao carregar cartões:', err);
+      }
+
+      console.log('✅ Carregamento concluído!');
 
       // Save to localStorage as offline cache
       const cacheData = {
@@ -142,13 +204,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheData));
 
     } catch (err: any) {
-      console.error('Error loading data from Supabase:', err);
+      console.error('❌ Erro geral ao carregar dados:', err);
       setError(err.message || 'Erro ao carregar dados do servidor');
 
       // Try to load from localStorage cache as fallback
       try {
         const cachedData = localStorage.getItem(STORAGE_KEY);
         if (cachedData) {
+          console.log('📦 Carregando dados do cache local...');
           const parsed = JSON.parse(cachedData);
           setProducts(parsed.products || []);
           setCustomers(parsed.customers || []);
@@ -156,10 +219,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setCategories(parsed.categories || defaultCategories);
           setCreditCards(parsed.creditCards || []);
           setSettings(parsed.settings || defaultSettings);
-          alert('Usando dados em cache. Você pode estar offline.');
+          console.log('✅ Dados do cache carregados com sucesso!');
+        } else {
+          console.warn('⚠️ Nenhum cache disponível');
         }
       } catch (cacheErr) {
-        console.error('Error loading cache:', cacheErr);
+        console.error('❌ Erro ao carregar cache:', cacheErr);
       }
     } finally {
       setLoading(false);

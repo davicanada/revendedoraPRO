@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Leaf, Mail, Lock, Eye, EyeOff, Loader2, User } from 'lucide-react';
+import { Leaf, Mail, Lock, Eye, EyeOff, Loader2, User, Wrench } from 'lucide-react';
 import { Button, Input } from '../common';
 import { useApp } from '../../context/AppContext';
+import { testSupabaseConnection } from '../../utils/testSupabaseConnection';
 
 export const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -194,6 +195,20 @@ export const LoginScreen: React.FC = () => {
         <Button variant="secondary" onClick={toggleMode} disabled={loading}>
           {isSignUp ? 'Já tenho uma conta' : 'Criar nova conta'}
         </Button>
+
+        {/* Botão de diagnóstico - temporário para debug */}
+        <button
+          type="button"
+          onClick={() => {
+            console.clear();
+            testSupabaseConnection();
+            alert('Diagnóstico iniciado! Veja os resultados no Console (F12)');
+          }}
+          className="mt-4 w-full flex items-center justify-center gap-2 py-2 text-xs text-gray-500 hover:text-brand-primary transition-colors"
+        >
+          <Wrench size={14} />
+          Testar Conexão com Supabase
+        </button>
       </div>
     </div>
   );

@@ -256,6 +256,7 @@ export interface Database {
           id: string
           user_id: string
           default_commission: number
+          physical_profit_margin: number
           low_stock_threshold: number
           currency: string
           created_at: string
@@ -265,6 +266,7 @@ export interface Database {
           id?: string
           user_id: string
           default_commission?: number
+          physical_profit_margin?: number
           low_stock_threshold?: number
           currency?: string
           created_at?: string
@@ -274,6 +276,7 @@ export interface Database {
           id?: string
           user_id?: string
           default_commission?: number
+          physical_profit_margin?: number
           low_stock_threshold?: number
           currency?: string
           created_at?: string

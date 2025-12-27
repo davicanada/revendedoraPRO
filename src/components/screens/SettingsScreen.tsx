@@ -61,30 +61,46 @@ export const SettingsScreen: React.FC = () => {
 
    const handleSaveCommission = async () => {
       const value = parseFloat(onlineCommission);
+      console.log('Salvando comissão:', value);
       if (isNaN(value) || value < 0 || value > 100) {
          alert('Por favor, insira um valor entre 0 e 100');
          setOnlineCommission((settings.defaultCommission * 100).toString());
          return;
       }
       try {
-         await updateSettings({ defaultCommission: value / 100 });
+         const newValue = value / 100;
+         console.log('Valor convertido:', newValue);
+         await updateSettings({ defaultCommission: newValue });
+         console.log('Comissão salva com sucesso!');
+         // Pequeno feedback visual
+         const event = new CustomEvent('settings-saved');
+         window.dispatchEvent(event);
       } catch (err) {
          console.error('Erro ao salvar comissão:', err);
+         alert('Erro ao salvar comissão: ' + (err as Error).message);
          setOnlineCommission((settings.defaultCommission * 100).toString());
       }
    };
 
    const handleSaveMargin = async () => {
       const value = parseFloat(physicalMargin);
+      console.log('Salvando margem:', value);
       if (isNaN(value) || value < 0 || value > 100) {
          alert('Por favor, insira um valor entre 0 e 100');
          setPhysicalMargin((settings.physicalProfitMargin * 100).toString());
          return;
       }
       try {
-         await updateSettings({ physicalProfitMargin: value / 100 });
+         const newValue = value / 100;
+         console.log('Valor convertido:', newValue);
+         await updateSettings({ physicalProfitMargin: newValue });
+         console.log('Margem salva com sucesso!');
+         // Pequeno feedback visual
+         const event = new CustomEvent('settings-saved');
+         window.dispatchEvent(event);
       } catch (err) {
          console.error('Erro ao salvar margem:', err);
+         alert('Erro ao salvar margem: ' + (err as Error).message);
          setPhysicalMargin((settings.physicalProfitMargin * 100).toString());
       }
    };
